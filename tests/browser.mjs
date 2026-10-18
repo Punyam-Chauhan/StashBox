@@ -1,0 +1,38 @@
+import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+const require=createRequire('C:/Users/Punyam/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/');
+const { chromium }=require('playwright');
+const browser=await chromium.launch({headless:true,executablePath:fileURLToPath(new URL('../.sites-runtime/browsers/chromium-1234/chrome-win64/chrome.exe',import.meta.url))});
+const page=await browser.newPage({viewport:{width:1440,height:1100}});
+const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await mkdir('outputs',{recursive:true});
+try{
+ await page.goto('http://127.0.0.1:5173/?demo=1');
+ await page.getByRole('heading',{name:'Your hostel’s midnight menu.'}).waitFor();
+ await page.locator('.product-card').first().waitFor();
+ await page.getByRole('button',{name:'Chips & namkeen',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelectorAll('.product-card').length===2);
+ assert.equal(await page.locator('.product-card').count(),2);
+ await page.getByRole('button',{name:/All munchies/}).click();
+ await page.getByRole('button',{name:/Kurkure Masala Munch/}).click();
+ await page.getByRole('dialog').waitFor();assert.equal(await page.locator('.offer').count(),3);
+ await page.getByRole('button',{name:'Close dialog'}).click();
+ await page.getByRole('textbox',{name:'Search snacks, rooms or sellers'}).fill('oreo');
+ await page.waitForFunction(()=>document.querySelectorAll('.product-card').length===1);
+ assert.equal(await page.locator('.product-card').count(),1);
+ await page.getByRole('button',{name:'Clear search'}).click();
+ await page.screenshot({path:'outputs/desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal page overflow');
+ await page.screenshot({path:'outputs/mobile.png',fullPage:true});
+ await page.getByRole('button',{name:'Got a stash? Start selling'}).click();
+ await page.getByRole('dialog').waitFor();
+ assert(await page.getByRole('textbox',{name:'Student ID'}).isVisible());
+ await page.getByRole('button',{name:'Close dialog'}).click();
+ await page.getByRole('button',{name:'Show real listings'}).click();
+ await page.getByRole('heading',{name:'Be your hostel’s first snack spot.'}).waitFor();
+ assert.equal(errors.length,0,errors.join('\n'));
+ console.log('Browser checks passed: demo filters, comparison, search, mobile layout, signup dialog, real empty state; no page errors.');
+}finally{await browser.close();}
