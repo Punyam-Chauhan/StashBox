@@ -68,8 +68,11 @@ try{
  const me=await (await context.request.get('http://127.0.0.1:5173/api/me')).json();fixtureId=me.user.id;
  assert.equal(me.user.room,'B-12');assert.equal(me.user.wing,'West 7');assert.equal(me.user.phase,'3');
  await page.getByRole('button',{name:'Add a snack',exact:true}).first().click();
- await page.getByRole('combobox',{name:'What are you selling?'}).selectOption('oreo-original-120g');
- await page.getByRole('spinbutton',{name:'Your price per pack (₹)'}).fill('35');
+ await page.getByRole('combobox',{name:'Product name (include flavour)'}).fill('Oreo Original');
+ await page.getByRole('option',{name:/Oreo Original/}).click();
+ await page.getByRole('spinbutton',{name:'Printed MRP (₹)'}).fill('30');
+ await page.getByRole('spinbutton',{name:'Printed MRP (₹)'}).blur();
+ await page.getByRole('spinbutton',{name:'Your selling price (₹)'}).fill('35',{timeout:20000});
  await page.getByRole('button',{name:'Add to my stash'}).click();
  await page.locator('.own-name').getByText('Oreo Original',{exact:true}).waitFor();
  await page.setViewportSize({width:1440,height:1100});

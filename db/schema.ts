@@ -23,12 +23,36 @@ export const listings = sqliteTable("listings", {
   sellerId: text("seller_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   productKey: text("product_key").notNull(), name: text("name").notNull(),
   size: text("size").notNull(), category: text("category").notNull(),
+  mrp: integer("mrp"), photoId: text("photo_id"),
+  container: text("container"), volumeMl: integer("volume_ml"),
   price: integer("price").notNull(), available: integer("available").notNull().default(1),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => [index("listings_seller").on(t.sellerId), uniqueIndex("listing_product_seller").on(t.sellerId, t.productKey)]);
 export const rateLimits = sqliteTable("rate_limits", {
   key: text("key").primaryKey(), count: integer("count").notNull(),
   expiresAt: integer("expires_at").notNull(),
+});
+// Open archive metadata stays separate from students, stock and selling prices.
+export const packetPhotos = sqliteTable("packet_photos", {
+  id: text("id").primaryKey(), objectKey: text("object_key").notNull(),
+  contentType: text("content_type").notNull(), source: text("source").notNull(),
+  sourceUrl: text("source_url"), credit: text("credit").notNull(), license: text("license"),
+  matchedName: text("matched_name").notNull(), uploadedBy: text("uploaded_by"),
+  productGroup: text("product_group"), category: text("category"),
+  createdAt: integer("created_at").notNull(),
+});
+export const productPhotoDefaults = sqliteTable("product_photo_defaults", {
+  productGroup:text("product_group").primaryKey(), name:text("name").notNull(),
+  category:text("category").notNull(), photoId:text("photo_id").notNull(),
+  selectedBy:text("selected_by").notNull(), updatedAt:integer("updated_at").notNull(),
+});
+export const productCatalog = sqliteTable("product_catalog", {
+  productGroup:text("product_group").primaryKey(),name:text("name").notNull(),
+  category:text("category").notNull(),createdAt:integer("created_at").notNull(),
+});
+export const packetCache = sqliteTable("packet_cache", {
+  productKey: text("product_key").primaryKey(), photoId: text("photo_id"),
+  status: text("status").notNull(), retryAfter: integer("retry_after").notNull(),
 });
 export const audit = sqliteTable("audit", {
   id: text("id").primaryKey(), actor: text("actor").notNull(),
