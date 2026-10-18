@@ -67,3 +67,9 @@ Drinks reuse their brand photo. Each listing specifies container and volume; tho
 Frontend: app/product-photos.tsx contains autocomplete, camera/file inputs, drink fields and image fitting. app/packet-illustration.tsx draws the fallback SVG; app/photo-manager.tsx manages defaults. app/photos.css contains the image-colour gradients and mobile layout. The original hero illustration remains in app/stashbox.tsx.
 
 Backend: app/server/packet-photos.ts resolves shared defaults and stores uploads; app/api/[...path]/route.ts validates stock, exposes product suggestions and protects maintainer operations. Database fields are in db/schema.ts; additive migrations preserve existing users and stock. Existing drink listings without variant details can be updated through Edit MRP & photo.
+
+## Compact product browsing
+
+The directory shows one card per product and flavour, with four columns on large desktops, three on smaller desktops/tablets and two on mobile. Selecting a product opens expandable MRP/pack options. Each option contains the seller room, asking price and availability; drinks also separate container and volume. Different flavours remain different cards. Hostels, wing/phase filters and stock expiry still apply before grouping.
+
+The backend retains individual listings and comparison keys. Frontend grouping lives in app/product-groups.ts and the variant expansion in app/stashbox.tsx. Starting prices prefer an open seller when one exists. Run node tests/grouped-cards.mjs for the grouped-card UI checks.

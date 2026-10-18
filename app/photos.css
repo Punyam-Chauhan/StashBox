@@ -19,3 +19,18 @@
 .own-art .packet-photo-frame .packet-photo,.suggestion-image .packet-photo-frame .packet-photo{padding:0;}
 .product-art>.packet-photo-frame>.packet-vector{padding:20px;max-width:90%;height:90%;}
 @media(prefers-reduced-motion:no-preference){.product-art .packet-photo{transition:transform .35s ease;}.product-card:hover .product-art .packet-photo{transform:scale(1.025);}}
+/* One product card; MRP and container options open inside its comparison. */
+.product-options{display:block;font-size:10px;line-height:1.5;color:#acbd98;margin-top:6px;}
+.variant-help{font-size:12px;color:#b5c7a1;line-height:1.65;margin:0 0 16px;}
+.pack-variant{border:1px solid #465b36;border-radius:10px;background:#192413;overflow:hidden;margin:12px 0;}
+.pack-variant>summary{display:flex;align-items:center;gap:14px;padding:16px;cursor:pointer;list-style:none;}
+.pack-variant>summary::-webkit-details-marker{display:none;}
+.pack-variant>summary:hover{background:#26361e;}
+.pack-variant>summary:focus-visible{outline:2px solid var(--orange);outline-offset:-3px;}
+.variant-title{flex:1;min-width:0;}.variant-title strong{font-size:13px;line-height:1.6;display:block;}.variant-title small{font-size:10px;color:#a6bc91;display:block;margin-top:4px;}
+.variant-starting-price{display:flex;flex-direction:column;font-size:20px;font-weight:700;color:#eef2e3;white-space:nowrap;}.variant-starting-price small{font-size:9px;font-weight:400;color:#a6bc91;}
+.pack-variant[open]>summary{border-bottom:1px solid #3d5130;}.pack-variant[open]>summary>svg{transform:rotate(180deg);}
+.pack-variant .offer-list{padding:0 14px;margin:0;}.pack-variant .offer-group:last-child .offer:last-child{border-bottom:0;}
+@media(min-width:1200px){.product-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;}.product-info{padding:14px 13px 0;}.product-info h3{font-size:12px;white-space:normal;line-height:1.4;min-height:34px;}.product-meta{font-size:9px;gap:6px;}}
+@media(min-width:900px) and (max-width:1199px){.product-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:520px){.pack-variant>summary{padding:12px;gap:9px;}.variant-title strong{font-size:11px;}.variant-starting-price{font-size:17px;}.pack-variant .offer-list{padding:0 9px;}.product-options{font-size:9px;}}
