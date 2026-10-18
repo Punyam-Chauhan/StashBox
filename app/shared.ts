@@ -1,3 +1,4 @@
+import type {Pricing} from "./pricing";
 import preparedPackets from "./packet-library.json";
 export const HOSTELS = [
   {id:"general-bipin-rawat",name:"General Bipin Rawat Bhawan",short:"General Bipin Rawat",initials:"BR"},
@@ -36,8 +37,8 @@ export const CATALOG: Product[] = [
 CATALOG.push(...preparedPackets.filter(p=>!CATALOG.some(c=>c.key===p.key)).map(p=>({key:p.key,name:p.name,category:p.category,size:"",color:"#798665",short:"STASH"})));
 export type User = { id:string; name:string; email:string; student_id:string; phone:string; room:string; hostel:string|null; wing:string|null; phase:string|null; show_phone:number; is_open:number; role:string; must_change_password:number; confirmed_at:number };
 export type DrinkVariant={container?:string|null;volume_ml?:number|null};
-export type Listing = Photo & DrinkVariant & {mrp:number|null; id:string; product_key:string; name:string; size:string; category:string; price:number; available:number; seller_id:string; seller_name:string; room:string; hostel:string; wing:string; phase:string|null; phone:string|null; is_open:number; confirmed_at:number };
+export type Listing = Photo & DrinkVariant & Pricing & {mrp:number|null; id:string; product_key:string; name:string; size:string; category:string; price:number; available:number; seller_id:string; seller_name:string; room:string; hostel:string; wing:string; phase:string|null; phone:string|null; is_open:number; confirmed_at:number };
 export type Photo = {photo_id:string|null;photo_path?:string|null;photo_source?:string|null;photo_credit?:string|null;photo_license?:string|null;photo_source_url?:string|null;photo_name?:string|null};
-export type OwnListing = Photo & DrinkVariant & {id:string;product_key:string;name:string;size:string;mrp:number|null;category:string;price:number;available:number};
+export type OwnListing = Photo & DrinkVariant & Pricing & {id:string;product_key:string;name:string;size:string;mrp:number|null;category:string;price:number;available:number};
 export const mrpLabel = (value:number|null|undefined) => value ? `MRP ${money(value)}` : "MRP not set";
 export const money = (paise:number) => `₹${(paise/100).toLocaleString("en-IN",{maximumFractionDigits:2})}`;

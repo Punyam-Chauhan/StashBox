@@ -36,6 +36,13 @@
       "when": 1792349825421,
       "tag": "0004_black_proudstar",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792356609394,
+      "tag": "0005_cloudy_namorita",
+      "breakpoints": true
     }
   ]
 }

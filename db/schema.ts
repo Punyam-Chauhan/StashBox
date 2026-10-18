@@ -25,6 +25,7 @@ export const listings = sqliteTable("listings", {
   size: text("size").notNull(), category: text("category").notNull(),
   mrp: integer("mrp"), photoId: text("photo_id"),
   container: text("container"), volumeMl: integer("volume_ml"),
+  priceAfter: integer("price_after"), priceUntil: integer("price_until"), usualPrice: integer("usual_price"), offerText: text("offer_text"),
   price: integer("price").notNull(), available: integer("available").notNull().default(1),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => [index("listings_seller").on(t.sellerId), uniqueIndex("listing_product_seller").on(t.sellerId, t.productKey)]);

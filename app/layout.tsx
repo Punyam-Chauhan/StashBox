@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./stashbox.css";
 import "./hostels.css";
 import "./photos.css";
+import "./readability.css";
 
 export const metadata: Metadata = {
   title: "StashBox — Your hostel’s midnight menu",

@@ -73,3 +73,15 @@ Backend: app/server/packet-photos.ts resolves shared defaults and stores uploads
 The directory shows one card per product and flavour, with four columns on large desktops, three on smaller desktops/tablets and two on mobile. Selecting a product opens expandable MRP/pack options. Each option contains the seller room, asking price and availability; drinks also separate container and volume. Different flavours remain different cards. Hostels, wing/phase filters and stock expiry still apply before grouping.
 
 The backend retains individual listings and comparison keys. Frontend grouping lives in app/product-groups.ts and the variant expansion in app/stashbox.tsx. Starting prices prefer an open seller when one exists. Run node tests/grouped-cards.mjs for the grouped-card UI checks.
+
+## Timed prices, discounts and readable text
+
+In My stash → Add snack or Edit pricing & photo, open the optional Offers & timed pricing section. The main selling price is the price now. For “₹20 until midnight, then ₹25”, enter 20 as the selling price, enable the time option, choose Tonight at midnight and enter 25 as the later price. The date/time field always means IST, including on devices in other time zones. This is a one-time change; it does not repeat every night. Daily stock confirmation is still required.
+
+To show a discount, optionally enter your usual selling price above the current selling price. This reference is separate from printed MRP. Offer notes such as “2 for ₹35” are displayed for buyers to discuss directly with the seller. To stop only an offer label at a chosen time, leave the later price blank; the selling price stays the same. Changing the quick price input manually clears an old schedule and offer so it cannot override your new price later. Toggling In stock / Sold out preserves the schedule.
+
+Backend: the additive 0005 migration stores price_after, price_until, usual_price and offer_text. app/pricing.ts validates writes and computes the effective price from the current timestamp. The public API includes effective_price alongside the original fields. No background job is needed to switch prices. The browser uses that same calculation for room comparisons, starting prices and best-price badges, and updates while the page is open.
+
+Frontend: app/pricing-ui.tsx contains the optional fields and buyer-facing offer details. app/readability.css loads after the existing styles to raise body text, navigation, form inputs, card titles and metadata consistently across desktop and mobile. Keep overrides there when adjusting text sizes. The hero artwork is unchanged.
+
+Checks: node tests/pricing.mjs covers the exact cutoff, IST midnight and validation. node tests/integration.mjs exercises real local API/database writes, persistence, expiry and ownership. node tests/pricing-browser.mjs checks live price changes, form submission, larger text and mobile fit.

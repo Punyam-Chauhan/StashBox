@@ -1,3 +1,4 @@
+import {currentPrice} from "./pricing";
 import {photoGroup,libraryProduct,normalizePacketName} from "./packet-library";
 import {mrpLabel,type Listing} from "./shared";
 
@@ -5,11 +6,11 @@ export type ProductGroup={key:string;name:string;category:string;offers:Listing[
 export type PackVariant={key:string;label:string;offers:Listing[]};
 export const productIdentity=(item:Pick<Listing,"name"|"category">)=>photoGroup(item.name,item.category);
 export const sellerCount=(offers:Listing[])=>new Set(offers.map(o=>o.seller_id)).size;
-export function startingPrice(offers:Listing[]){const open=offers.filter(o=>o.is_open);return Math.min(...(open.length?open:offers).map(o=>o.price));}
+export function startingPrice(offers:Listing[]){const open=offers.filter(o=>o.is_open);return Math.min(...(open.length?open:offers).map(o=>currentPrice(o)));}
 export function groupProducts(offers:Listing[]):ProductGroup[]{
  const groups=new Map<string,ProductGroup>();
  for(const offer of offers){const key=productIdentity(offer);if(!groups.has(key))groups.set(key,{key,name:libraryProduct(offer.name)?.name||offer.name,category:offer.category,offers:[]});groups.get(key)!.offers.push(offer);}
- for(const group of groups.values())group.offers.sort((a,b)=>b.is_open-a.is_open||a.price-b.price);
+ for(const group of groups.values())group.offers.sort((a,b)=>b.is_open-a.is_open||currentPrice(a)-currentPrice(b));
  return [...groups.values()];
 }
 export function variantLabel(offer:Listing){
