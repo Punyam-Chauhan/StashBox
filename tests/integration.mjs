@@ -5,16 +5,18 @@ import { existsSync, readFileSync } from 'node:fs';
 const base=process.env.STASHBOX_TEST_URL||'http://127.0.0.1:5173';
 assert(['127.0.0.1','localhost'].includes(new URL(base).hostname),'Tests are restricted to loopback.');
 const run=`qa${Date.now()}`;let checks=0;const ids=[];
+const feed='listings?hostel=mandakini';
+const home={hostel:'mandakini',wing:'East 9',phase:'1',room:'224'};
 function sql(command){const r=spawnSync(process.execPath,['--import','./scripts/sites-env.mjs','./node_modules/wrangler/bin/wrangler.js','d1','execute','DB','--local','--config','dist/server/wrangler.json','--persist-to','.wrangler/state','--command',command],{encoding:'utf8'});if(r.status!==0)throw new Error(r.stderr||r.stdout);}
 async function call(path,method='GET',body,cookie='',extra={}){const r=await fetch(`${base}/api/${path}`,{method,headers:{...(body?{'Content-Type':'application/json'}:{}),...(cookie?{Cookie:cookie}:{}),...extra},body:body?JSON.stringify(body):undefined});const raw=await r.text();let data;try{data=JSON.parse(raw);}catch{data={error:raw};}return {status:r.status,data,cookie:r.headers.get('set-cookie')?.split(';')[0]||''};}
 function check(value,message){assert(value,message);checks++;console.log(`PASS ${message}`);}
-async function signup(suffix,room=224){const r=await call('signup','POST',{name:`QA Student ${suffix}`,email:`${run}${suffix}@example.test`,studentId:`${run}${suffix}`,phone:'9000000000',room,password:'Test-password-482!'});check(r.status===200,`Signup ${suffix}`);ids.push(r.data.user.id);return {...r,user:r.data.user};}
+async function signup(suffix,room='224',location=home){const r=await call('signup','POST',{name:`QA Student ${suffix}`,email:`${run}${suffix}@example.test`,studentId:`${run}${suffix}`,phone:'9000000000',...location,room,password:'Test-password-482!'});check(r.status===200,`Signup ${suffix}`);ids.push(r.data.user.id);return {...r,user:r.data.user};}
 try{
   const anonymous=await call('me');check(anonymous.status===200&&anonymous.data.user===null,'Anonymous browsing needs no account');
   const a=await signup('a'),b=await signup('b');check(a.user.room===b.user.room&&a.user.id!==b.user.id,'Roommates have separate accounts');
   check((await call('me','GET',undefined,a.cookie)).data.user?.id===a.user.id,'Session cookie identifies the student');
   check(!('password_hash' in a.user)&&!('salt' in a.user),'Private password material excluded from responses');
-  check((await call('signup','POST',{name:'Other',email:`${run}a@example.test`,studentId:`${run}new`,phone:'9000000000',room:224,password:'Test-password-482!'})).status===409,'Duplicate registration rejected');
+  check((await call('signup','POST',{name:'Other',email:`${run}a@example.test`,studentId:`${run}new`,phone:'9000000000',...home,password:'Test-password-482!'})).status===409,'Duplicate registration rejected');
   check((await call('login','POST',{identifier:`${run}a`,password:'wrong'})).status===401,'Wrong passwords rejected');
   check((await call('login','POST',{identifier:`${run}a`,password:'Test-password-482!'})).status===200,'Student ID login works');
   check((await call('login','POST',{identifier:`${run}a@example.test`,password:'Test-password-482!'})).status===200,'Email login works');
@@ -24,27 +26,46 @@ try{
   const mine=await call('mine','GET',undefined,a.cookie),item=mine.data.listings[0];
   check((await call(`mine/${item.id}`,'PUT',{price:1000,available:true},b.cookie)).status===404,'Seller cannot edit a roommate’s listing');
   check((await call(`mine/${item.id}`,'DELETE',undefined,b.cookie)).status===404,'Seller cannot delete a roommate’s listing');
-  const pub=await call('listings');const ours=pub.data.listings.filter(l=>ids.includes(l.seller_id));
+  const pub=await call(feed);const ours=pub.data.listings.filter(l=>ids.includes(l.seller_id));
   check(ours.length===2&&ours[0].price===3000,'Matching packs list both sellers in price order');
   check(ours.every(l=>l.phone===null&&!('email'in l)&&!('student_id'in l)),'Phone, email and student ID private by default');
-  await call('profile','PUT',{name:a.user.name,phone:'9000000000',room:224,showPhone:true,isOpen:false},a.cookie);
-  const shown=(await call('listings')).data.listings.find(l=>l.seller_id===a.user.id);
-  check(shown.phone==='9000000000'&&shown.is_open===0&&shown.wing===9,'Phone opt-in, closed status and wing mapping work');
-  check((await call('profile','PUT',{name:'Test',phone:'9000000000',room:999,showPhone:false,isOpen:true},a.cookie)).status===400,'Invalid rooms rejected');
+  await call('profile','PUT',{name:a.user.name,phone:'9000000000',...home,showPhone:true,isOpen:false},a.cookie);
+  const shown=(await call(feed)).data.listings.find(l=>l.seller_id===a.user.id);
+  check(shown.phone==='9000000000'&&shown.is_open===0&&shown.wing==='East 9'&&shown.phase==='1','Phone opt-in, closed status and entered wing/phase work');
+  check((await call('profile','PUT',{name:'Test',phone:'9000000000',...home,room:'../../',showPhone:false,isOpen:true},a.cookie)).status===400,'Invalid location labels rejected');
   check((await call(`mine/${item.id}`,'PUT',{price:-5,available:true},a.cookie)).status===400,'Invalid prices rejected');
   await call(`mine/${item.id}`,'PUT',{price:3500,available:false},a.cookie);
-  check(!(await call('listings')).data.listings.some(l=>l.id===item.id),'Sold-out items excluded from public listings');
+  check(!(await call(feed)).data.listings.some(l=>l.id===item.id),'Sold-out items excluded from public listings');
   await call(`mine/${item.id}`,'PUT',{price:3500,available:true},a.cookie);
   sql(`UPDATE users SET confirmed_at=0 WHERE id='${a.user.id}'`);
-  check(!(await call('listings')).data.listings.some(l=>l.id===item.id),'Stock older than 24 hours hidden on server');
+  check(!(await call(feed)).data.listings.some(l=>l.id===item.id),'Stock older than 24 hours hidden on server');
   await call('confirm','POST',{},a.cookie);
-  check((await call('listings')).data.listings.some(l=>l.id===item.id),'Daily confirmation republishes stock');
+  check((await call(feed)).data.listings.some(l=>l.id===item.id),'Daily confirmation republishes stock');
   check((await call('admin/users','GET',undefined,b.cookie)).status===403,'Ordinary sellers cannot read maintainer data');
   check((await call('admin/bootstrap','POST',{token:'wrong'},b.cookie)).status===403,'Room 224 alone does not grant admin access');
   check((await call('confirm','POST',{},a.cookie,{Origin:'https://elsewhere.invalid'})).status===403,'Cross-origin writes rejected');
+  check((await call('listings')).status===400,'Hostel is required by the listing API');
+  check((await call('listings?hostel=unknown')).status===400,'Unknown hostels rejected');
+  const c=await signup('c','B-12',{hostel:'tagore',wing:'West 7',phase:'3'});
+  check(c.user.room==='B-12'&&c.user.wing==='West 7'&&c.user.phase===null,'Free-form room/wing supported and non-Mandakini phase cleared');
+  await call('mine','POST',{productKey:'oreo-original-120g',price:1000},c.cookie);
+  check(!(await call(feed)).data.listings.some(l=>l.seller_id===c.user.id),'Other-hostel listings never enter Mandakini response');
+  check((await call('listings?hostel=tagore')).data.listings.filter(l=>ids.includes(l.seller_id)).every(l=>l.seller_id===c.user.id),'Tagore response excludes Mandakini sellers');
+  check((await call('profile','PUT',{name:b.user.name,phone:'9000000000',...home,phase:'',showPhone:false,isOpen:true},b.cookie)).status===400,'Mandakini phase is required');
+  check((await call('profile','PUT',{name:b.user.name,phone:'9000000000',...home,phase:'4',showPhone:false,isOpen:true},b.cookie)).status===400,'Unknown Mandakini phase rejected');
+  await call('profile','PUT',{name:b.user.name,phone:'9000000000',...home,phase:'3',showPhone:false,isOpen:true},b.cookie);
+  const phases=(await call(feed)).data.listings.filter(l=>l.seller_id===a.user.id||l.seller_id===b.user.id);
+  check(phases.some(l=>l.phase==='1')&&phases.some(l=>l.phase==='3'),'Same room labels in different phases retain their phase');
+  sql("UPDATE users SET hostel=NULL,wing=NULL,phase=NULL WHERE id='"+c.user.id+"'");
+  check(!(await call('listings?hostel=tagore')).data.listings.some(l=>l.seller_id===c.user.id),'Existing unassigned accounts stay hidden until location is chosen');
+  check((await call('mine','POST',{productKey:'maggi-masala-70g',price:2000},c.cookie)).status===400,'Unassigned accounts must choose location before adding stock');
+  await call('profile','PUT',{name:c.user.name,phone:'9000000000',hostel:'patel',wing:'South',room:'G-04',showPhone:false,isOpen:true},c.cookie);
+  check((await call('listings?hostel=patel')).data.listings.some(l=>l.seller_id===c.user.id),'Profile location moves saved stock to its chosen hostel');
   const setupKey=existsSync('.dev.vars')?readFileSync('.dev.vars','utf8').match(/^MAINTAINER_BOOTSTRAP_TOKEN="?([^"\r\n]+)"?$/m)?.[1]:null;
   if(setupKey){
-    check((await call('admin/bootstrap','POST',{token:setupKey},a.cookie)).status===200,'Private setup key activates the first maintainer');
+    const bootstrap=await call('admin/bootstrap','POST',{token:setupKey},a.cookie);
+    check([200,409].includes(bootstrap.status),'Private setup key activates first maintainer or preserves existing one');
+    if(bootstrap.status===409)sql(`UPDATE users SET role='admin' WHERE id='${a.user.id}'`);
     check((await call('admin/bootstrap','POST',{token:setupKey},b.cookie)).status===409,'A second maintainer cannot claim setup');
   }else sql(`UPDATE users SET role='admin' WHERE id='${a.user.id}'`);
   check((await call('admin/users','GET',undefined,a.cookie)).status===200,'Maintainer can find accounts');

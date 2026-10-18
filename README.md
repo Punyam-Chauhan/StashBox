@@ -1,6 +1,6 @@
 # StashBox
 
-A hostel snack directory for 350 students. Built with React, Vinext, Cloudflare Workers and D1.
+A snack directory for General Bipin Rawat, Tagore, Patel, Silver Jubilee, Vishwesharya, Saraswati, Mandakini and Sarojini Bhawan. Built with React, Vinext, Cloudflare Workers and D1.
 
 ## Run locally
 
@@ -10,9 +10,9 @@ Dependencies are already installed in this checkout. From this folder run:
 node scripts/start-local.mjs
 ```
 
-Open http://127.0.0.1:5173/ for real local listings. Use http://127.0.0.1:5173/?demo=1 for explicitly labelled fictional listings. Demo data is never inserted into the database. The live directory starts empty.
+Open http://127.0.0.1:5173/ to choose a hostel and browse its real local listings. The selected hostel is remembered on that browser. Use the Change hostel button to return to the landing page. Use http://127.0.0.1:5173/?demo=1 for explicitly labelled fictional listings, or http://127.0.0.1:5173/?hostel=mandakini&demo=1 to inspect the Mandakini demo. Demo data is never inserted into the database.
 
-The startup script initializes a missing local database and generates a private maintainer setup key. It never deploys or publishes. Stop the preview with Ctrl+C. Restarting retains the local database in `.wrangler/state/`.
+The startup script initializes a missing local database, applies pending local migrations once using a database-local journal, and generates a private maintainer setup key. It never deploys or publishes. Stop the preview with Ctrl+C. Restarting retains the local database in `.wrangler/state/`.
 
 ## Maintainer account
 
@@ -22,7 +22,10 @@ The maintainer can search accounts, acknowledge an in-person identity check, and
 
 ## Included
 
-- Public snack directory with search, categories, wing filters, open-now filter and price sorting.
+- Hostel-selection landing page and hostel-scoped snack directories. The illustrated hero appears on the landing page and below the listings, keeping snacks at the top of the directory.
+- Search, categories, dynamically populated wing filters, open-now filter and price sorting.
+- Sellers enter their own room and wing labels, including values such as B-12 and West 7. No fixed room list is assumed.
+- Mandakini requires Phase 1, 2 or 3. Buyers can browse all phases, Phases 1–2, or Phase 3. Cards identify phases and comparisons separate Phase 3 from Phases 1–2. The access notice cautions that rooms across that divide may be unreachable after 10 PM; it does not automatically hide stock or enforce a curfew.
 - Comparison of the same product and exact pack size across separate sellers, including roommates.
 - Signup with name, email, student ID, phone, room and password; login with email or student ID.
 - Private email and student ID. Phone number is hidden until the seller opts into calls.
@@ -41,7 +44,11 @@ node tests/browser.mjs
 
 The integration test runs against loopback only, creates synthetic local accounts and cleans them up. Browser tests use Playwright from the bundled runtime and the ignored browser download under `.sites-runtime/browsers/`; adjust those machine-specific paths on another computer. Screenshots are saved in ignored `outputs/`.
 
-Room ranges follow the supplied document. Some document headings and rows disagree about unusable rooms, so the selector currently includes every room within each numbered wing range. Confirm exclusions before campus launch. Student identities and room assignments are self-declared; the uploaded student roster has not been imported or exposed.
+Hostel, wing, phase and room assignments are self-declared. The uploaded student roster has not been imported or exposed. The API requires a valid hostel for every public listing request and filters the database query by that hostel.
+
+The hostel migration adds nullable location fields and preserves the original numeric room column internally. Existing accounts and listings are retained. Accounts created before hostel support must choose their location in the profile before their listings become visible; no hostel is guessed for them. New room labels are returned as strings.
+
+For learning: edit hostel names and phase copy in `app/shared.ts`, the chooser and listing behavior in `app/stashbox.tsx`, new styling in `app/hostels.css`, API validation and filtering in `app/api/[...path]/route.ts`, and database fields in `db/schema.ts`. After a schema change, generate an additional migration with `node node_modules/drizzle-kit/bin.cjs generate`; never edit a migration already applied to an existing database.
 
 ## Later online setup
 

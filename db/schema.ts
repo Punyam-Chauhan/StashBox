@@ -4,13 +4,15 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(), name: text("name").notNull(),
   email: text("email").notNull().unique(), studentId: text("student_id").notNull().unique(),
   phone: text("phone").notNull(), room: integer("room").notNull(),
+  // Preserve the old numeric room column; new locations are entered as text.
+  roomLabel: text("room_label"), hostel: text("hostel"), wing: text("wing"), phase: text("phase"),
   passwordHash: text("password_hash").notNull(), salt: text("salt").notNull(),
   showPhone: integer("show_phone").notNull().default(0),
   isOpen: integer("is_open").notNull().default(1),
   role: text("role").notNull().default("seller"),
   mustChangePassword: integer("must_change_password").notNull().default(0),
   confirmedAt: integer("confirmed_at").notNull(), createdAt: integer("created_at").notNull(),
-}, (t) => [index("users_confirmed").on(t.confirmedAt)]);
+}, (t) => [index("users_confirmed").on(t.confirmedAt), index("users_hostel_confirmed").on(t.hostel, t.confirmedAt)]);
 export const sessions = sqliteTable("sessions", {
   tokenHash: text("token_hash").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),

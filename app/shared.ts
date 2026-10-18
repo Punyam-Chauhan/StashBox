@@ -1,9 +1,20 @@
-export const WINGS = [
-  [1,101,112],[2,113,126],[3,127,137],[4,138,149],[5,150,162],[6,163,175],[7,176,183],
-  [8,201,212],[9,213,226],[10,227,237],[11,238,249],[12,250,262],[13,263,275],[14,276,283],
+export const HOSTELS = [
+  {id:"general-bipin-rawat",name:"General Bipin Rawat Bhawan",short:"General Bipin Rawat",initials:"BR"},
+  {id:"tagore",name:"Tagore Bhawan",short:"Tagore",initials:"TB"},
+  {id:"patel",name:"Patel Bhawan",short:"Patel",initials:"PB"},
+  {id:"silver-jubilee",name:"Silver Jubilee Bhawan",short:"Silver Jubilee",initials:"SJ"},
+  {id:"vishwesharya",name:"Vishwesharya Bhawan",short:"Vishwesharya",initials:"VB"},
+  {id:"saraswati",name:"Saraswati Bhawan",short:"Saraswati",initials:"SB"},
+  {id:"mandakini",name:"Mandakini Bhawan",short:"Mandakini",initials:"MB"},
+  {id:"sarojini",name:"Sarojini Bhawan",short:"Sarojini",initials:"SN"},
 ] as const;
-export const wingForRoom = (room: number) => WINGS.find(([,start,end])=>room>=start&&room<=end)?.[0];
-export const ROOMS = WINGS.flatMap(([,start,end])=>Array.from({length:end-start+1},(_,i)=>start+i));
+export const isHostel = (id:unknown):id is string => typeof id==="string"&&HOSTELS.some(h=>h.id===id);
+export const hostelName = (id:string|null|undefined) => HOSTELS.find(h=>h.id===id)?.name||"Choose a hostel";
+export const PHASE_NOTICE = "Phase 3 is separated from Phases 1–2. Rooms across this divide may be unreachable after 10 PM. Check access with the seller before heading over.";
+export function locationText(location:{room:string|number;wing?:string|null;phase?:string|null}) {
+  return [location.phase?`Phase ${location.phase}`:null,location.wing?`Wing ${location.wing}`:null,`Room ${location.room}`].filter(Boolean).join(" · ");
+}
+export function matchesPhase(phase:string|null,group:string) {return group==="all"||(group==="connected"&&(phase==="1"||phase==="2"))||(group==="3"&&phase==="3");}
 export const CATEGORIES = ["All munchies", "Chips & namkeen", "Sweet tooth", "Instant fixes", "Drinks"];
 export type Product = { key: string; name: string; size: string; category: string; color: string; short: string };
 export const CATALOG: Product[] = [
@@ -20,7 +31,7 @@ export const CATALOG: Product[] = [
   {key:"real-mango-200ml",name:"Real Mango Juice",size:"200 ml",category:"Drinks",color:"#6c9a44",short:"REAL"},
   {key:"bourbon-100g",name:"Bourbon Biscuits",size:"100 g",category:"Sweet tooth",color:"#77412e",short:"BOURBON"},
 ];
-export type User = { id:string; name:string; email:string; student_id:string; phone:string; room:number; show_phone:number; is_open:number; role:string; must_change_password:number; confirmed_at:number };
-export type Listing = { id:string; product_key:string; name:string; size:string; category:string; price:number; available:number; seller_id:string; seller_name:string; room:number; wing:number; phone:string|null; is_open:number; confirmed_at:number };
+export type User = { id:string; name:string; email:string; student_id:string; phone:string; room:string; hostel:string|null; wing:string|null; phase:string|null; show_phone:number; is_open:number; role:string; must_change_password:number; confirmed_at:number };
+export type Listing = { id:string; product_key:string; name:string; size:string; category:string; price:number; available:number; seller_id:string; seller_name:string; room:string; hostel:string; wing:string; phase:string|null; phone:string|null; is_open:number; confirmed_at:number };
 export type OwnListing = {id:string;product_key:string;name:string;size:string;category:string;price:number;available:number};
 export const money = (paise:number) => `₹${(paise/100).toLocaleString("en-IN",{maximumFractionDigits:2})}`;

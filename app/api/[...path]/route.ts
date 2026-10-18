@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { CATALOG, CATEGORIES, wingForRoom } from "../../shared";
+import { CATALOG, CATEGORIES, isHostel } from "../../shared";
 
 export const dynamic = "force-dynamic";
 const DAY = 86400000;
@@ -12,6 +12,14 @@ function json(value:unknown,status=200,headers:Record<string,string>={}) {
   return Response.json(value,{status,headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff",...headers}});
 }
 function str(value:unknown,max=120) { return typeof value==="string" ? value.trim().slice(0,max) : ""; }
+function parseLocation(value:any) {
+  const room=String(value.room??"").trim(),wing=String(value.wing??"").trim(),hostel=value.hostel;
+  const label=/^[\p{L}\p{N}][\p{L}\p{N} .\/-]{0,23}$/u;
+  if(!isHostel(hostel)||!label.test(room)||!label.test(wing))fail(400,"Choose your hostel and enter a room and wing (up to 24 letters, numbers, spaces, / or -).");
+  const phase=hostel==="mandakini"?String(value.phase??""):null;
+  if(hostel==="mandakini"&&!["1","2","3"].includes(phase!))fail(400,"Choose Mandakini Phase 1, 2 or 3.");
+  return {room,wing,hostel,phase};
+}
 function validatePassword(value:unknown) {
   if(typeof value!=="string"||value.length<10||value.length>128) fail(400,"Use a password between 10 and 128 characters.");
   return value;
@@ -24,7 +32,7 @@ async function hashPassword(password:string,salt:string) {
   return Array.from(new Uint8Array(bits),b=>b.toString(16).padStart(2,"0")).join("");
 }
 function equal(a:string,b:string) { let diff=a.length^b.length; for(let i=0;i<Math.max(a.length,b.length);i++)diff|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0); return diff===0; }
-const safeColumns="u.id,u.name,u.email,u.student_id,u.phone,u.room,u.show_phone,u.is_open,u.role,u.must_change_password,u.confirmed_at";
+const safeColumns="u.id,u.name,u.email,u.student_id,u.phone,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,u.show_phone,u.is_open,u.role,u.must_change_password,u.confirmed_at";
 async function currentUser(req:Request,required=true) {
   const token=req.headers.get("cookie")?.match(/(?:^|;\s*)stash_session=([a-f0-9]{64})(?:;|$)/)?.[1];
   const user=token ? await db().prepare(`SELECT ${safeColumns} FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?`).bind(await digest(token),Date.now()).first<any>() : null;
@@ -67,20 +75,25 @@ async function handle(req:Request) {
   }
   if(path==="me"&&req.method==="GET")return json({user:await currentUser(req,false)});
   if(path==="listings"&&req.method==="GET") {
+    const hostel=url.searchParams.get("hostel");
+    if(!isHostel(hostel))fail(400,"Choose a hostel to see its listings.");
     const rows=await db().prepare(`SELECT l.id,l.product_key,l.name,l.size,l.category,l.price,l.available,l.seller_id,
-      u.name AS seller_name,u.room,CASE WHEN u.show_phone=1 THEN u.phone ELSE NULL END AS phone,u.is_open,u.confirmed_at
-      FROM listings l JOIN users u ON u.id=l.seller_id WHERE l.available=1 AND u.confirmed_at>? ORDER BY l.price,l.id`).bind(Date.now()-DAY).all<any>();
-    return json({listings:rows.results.map(r=>({...r,wing:wingForRoom(r.room)}))});
+      u.name AS seller_name,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,
+      CASE WHEN u.show_phone=1 THEN u.phone ELSE NULL END AS phone,u.is_open,u.confirmed_at
+      FROM listings l JOIN users u ON u.id=l.seller_id
+      WHERE l.available=1 AND u.confirmed_at>? AND u.hostel=? AND u.wing IS NOT NULL
+      AND (u.hostel!='mandakini' OR u.phase IN ('1','2','3')) ORDER BY l.price,l.id`).bind(Date.now()-DAY,hostel).all<any>();
+    return json({hostel,listings:rows.results});
   }
   if(path==="signup"&&req.method==="POST") {
     await rate(req,"signup",8,15*60000);
     const b=await body(req), name=str(b.name,60),email=str(b.email,120).toLowerCase(),studentId=str(b.studentId,40).toLowerCase(),phone=str(b.phone,20).replace(/[\s()-]/g,"");
-    const room=Number(b.room),password=validatePassword(b.password);
-    if(name.length<2||!/^\S+@\S+\.\S+$/.test(email)||!/^[-a-z0-9_/.]{3,40}$/.test(studentId)||!/^\+?\d{10,15}$/.test(phone)||!wingForRoom(room)||!Number.isInteger(room))fail(400,"Check your name, email, student ID, phone and room number.");
+    const location=parseLocation(b),password=validatePassword(b.password);
+    if(name.length<2||!/^\S+@\S+\.\S+$/.test(email)||!/^[-a-z0-9_/.]{3,40}$/.test(studentId)||!/^\+?\d{10,15}$/.test(phone))fail(400,"Check your name, email, student ID and phone number.");
     const existing=await db().prepare("SELECT id FROM users WHERE email=? OR student_id=?").bind(email,studentId).first();
     if(existing)fail(409,"That email or student ID is already registered. Try logging in.");
     const id=crypto.randomUUID(),salt=randomToken(16),now=Date.now();
-    try {await db().prepare("INSERT INTO users (id,name,email,student_id,phone,room,password_hash,salt,show_phone,is_open,role,must_change_password,confirmed_at,created_at) VALUES (?,?,?,?,?,?,?,?,0,1,'seller',0,?,?)").bind(id,name,email,studentId,phone,room,await hashPassword(password,salt),salt,now,now).run();}
+    try {await db().prepare("INSERT INTO users (id,name,email,student_id,phone,room,room_label,hostel,wing,phase,password_hash,salt,show_phone,is_open,role,must_change_password,confirmed_at,created_at) VALUES (?,?,?,?,?,0,?,?,?,?,?,?,0,1,'seller',0,?,?)").bind(id,name,email,studentId,phone,location.room,location.hostel,location.wing,location.phase,await hashPassword(password,salt),salt,now,now).run();}
     catch(e){if(String(e).includes("UNIQUE"))fail(409,"That email or student ID is already registered.");throw e;}
     return loginResponse(req,id);
   }
@@ -114,9 +127,10 @@ async function handle(req:Request) {
   }
   if(path==="profile"&&req.method==="PUT") {
     const user=await seller(req),b=await body(req);
-    const name=str(b.name,60),phone=str(b.phone,20).replace(/[\s()-]/g,""),room=Number(b.room);
-    if(name.length<2||!/^\+?\d{10,15}$/.test(phone)||!Number.isInteger(room)||!wingForRoom(room))fail(400,"Check your name, phone and room.");
-    await db().prepare("UPDATE users SET name=?,phone=?,room=?,show_phone=?,is_open=? WHERE id=?").bind(name,phone,room,b.showPhone?1:0,b.isOpen?1:0,user.id).run();
+    const name=str(b.name,60),phone=str(b.phone,20).replace(/[\s()-]/g,"");
+    const location=parseLocation(b);
+    if(name.length<2||!/^\+?\d{10,15}$/.test(phone))fail(400,"Check your name and phone.");
+    await db().prepare("UPDATE users SET name=?,phone=?,room_label=?,hostel=?,wing=?,phase=?,show_phone=?,is_open=? WHERE id=?").bind(name,phone,location.room,location.hostel,location.wing,location.phase,b.showPhone?1:0,b.isOpen?1:0,user.id).run();
     return json({ok:true});
   }
   if(path==="confirm"&&req.method==="POST") {
@@ -130,6 +144,7 @@ async function handle(req:Request) {
   }
   if(path==="mine"&&req.method==="POST") {
     const user=await seller(req);await rate(req,"add-listing",50);
+    if(!isHostel(user.hostel)||!user.wing||(user.hostel==="mandakini"&&!["1","2","3"].includes(user.phase)))fail(400,"Set your hostel, wing and phase in your profile before listing a snack.");
     const b=await body(req),product=CATALOG.find(p=>p.key===b.productKey);
     const name=product?.name||str(b.name,70),size=product?.size||str(b.size,25),category=product?.category||str(b.category,40),price=Number(b.price);
     if(name.length<2||!size||!CATEGORIES.slice(1).includes(category)||!Number.isInteger(price)||price<100||price>100000)fail(400,"Choose an item and a price between ₹1 and ₹1,000.");
@@ -157,7 +172,7 @@ async function handle(req:Request) {
   if(path==="admin/bootstrap"&&req.method==="POST") {
     const user=await seller(req);await rate(req,"bootstrap",5);
     const secret=(env as any).MAINTAINER_BOOTSTRAP_TOKEN,b=await body(req);
-    if(!secret||!equal(await digest(String(b.token||"")),await digest(secret))||user.room!==224)fail(403,"Maintainer setup is unavailable or the setup key is incorrect.");
+    if(!secret||!equal(await digest(String(b.token||"")),await digest(secret))||String(user.room)!=="224")fail(403,"Maintainer setup is unavailable or the setup key is incorrect.");
     // Atomic guard: only one initial administrator can ever be provisioned here.
     const result=await db().prepare("UPDATE users SET role='admin' WHERE id=? AND NOT EXISTS(SELECT 1 FROM users WHERE role='admin')").bind(user.id).run();
     if(!result.meta.changes)fail(409,"The maintainer account is already set up.");
@@ -166,7 +181,7 @@ async function handle(req:Request) {
   if(path==="admin/users"&&req.method==="GET") {
     await admin(req);
     const search=str(url.searchParams.get("search"),120).replace(/[%_\\]/g,"");
-    const users=await db().prepare("SELECT id,name,email,student_id,room,role FROM users WHERE name LIKE ? OR email LIKE ? OR student_id LIKE ? ORDER BY created_at DESC LIMIT 50").bind(`%${search}%`,`%${search}%`,`%${search}%`).all();
+    const users=await db().prepare("SELECT id,name,email,student_id,COALESCE(room_label,CAST(room AS TEXT)) AS room,hostel,wing,phase,role FROM users WHERE name LIKE ? OR email LIKE ? OR student_id LIKE ? ORDER BY created_at DESC LIMIT 50").bind(`%${search}%`,`%${search}%`,`%${search}%`).all();
     return json({users:users.results});
   }
   if(path==="admin/reset"&&req.method==="POST") {

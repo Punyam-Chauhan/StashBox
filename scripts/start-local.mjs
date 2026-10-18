@@ -17,7 +17,18 @@ const cli=['--import','./scripts/sites-env.mjs','./node_modules/wrangler/bin/wra
 const inspected=spawnSync(process.execPath,[...cli,'--json','--command',"SELECT name FROM sqlite_master WHERE type='table' AND name='users'"],{encoding:'utf8'});
 if(inspected.status!==0){console.error('Could not inspect the local database.');console.error(inspected.stderr);process.exit(1);}
 let found=false;try{found=JSON.parse(inspected.stdout).some(r=>r.results?.some(t=>t.name==='users'));}catch{console.error('Could not read the local database check.');process.exit(1);}
-if(!found){for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())run([...cli,'--file',`drizzle/${file}`]);}
+// Keep a database-local migration journal so restarting applies only new SQL.
+run([...cli,'--command','CREATE TABLE IF NOT EXISTS _stashbox_local_migrations (name TEXT PRIMARY KEY NOT NULL)']);
+const migrationFiles=readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort();
+if(found&&migrationFiles[0])run([...cli,'--command',`INSERT OR IGNORE INTO _stashbox_local_migrations (name) VALUES ('${migrationFiles[0]}')`]);
+const journal=spawnSync(process.execPath,[...cli,'--json','--command','SELECT name FROM _stashbox_local_migrations'],{encoding:'utf8'});
+if(journal.status!==0){console.error('Could not read local migration history.');process.exit(1);}
+const applied=new Set(JSON.parse(journal.stdout).flatMap(r=>r.results||[]).map(r=>r.name));
+for(const file of migrationFiles){
+  if(applied.has(file))continue;
+  run([...cli,'--file',`drizzle/${file}`]);
+  run([...cli,'--command',`INSERT INTO _stashbox_local_migrations (name) VALUES ('${file}')`]);
+}
 console.log('\nStashBox stays on your computer. No online deployment is performed.');
 console.log('Open http://127.0.0.1:5173/');
 console.log('Maintainer instructions: .sites-runtime/maintainer-setup.txt\n');
