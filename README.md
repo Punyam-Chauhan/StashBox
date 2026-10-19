@@ -1,72 +1,67 @@
 # StashBox
 
-A hostel snack directory and a separate campus exchange at /pawn. Built with React, Vinext, Cloudflare Workers, D1 and R2. Development stays local; building does not publish the app.
+**Your hostel’s midnight menu.**
 
-## Run locally
+Craving a snack? Find out who has it in your hostel, compare prices, and head to their room. Got extra snacks? Put your stash up for sale.
 
-Use Node 22.13 or newer. Install with npm install, then initialize the local database and start the app:
+StashBox also includes **The Pawn Shop**, where students can buy and sell things across campus.
 
-```powershell
+## What you can do
+
+- **Find a snack:** Choose your hostel, browse snacks, and compare prices between rooms.
+- **Become a Stasher:** Add your snacks, set prices, and open your shop when you’re available. Closing your shop hides your snacks until you reopen.
+- **Track your stash:** Record purchases and sales in your private dashboard.
+- **Use The Pawn Shop:** List or browse items such as books, cycles, and other useful things.
+
+Buyers and Stashers arrange payment and collection directly. There’s no commission, delivery, or checkout in the app.
+
+## Run it on your computer
+
+You’ll need **Node.js 22.13 or newer** and **Git**.
+
+**1. Download the project.** Open a terminal and run:
+
+```sh
+git clone https://github.com/Punyam-Chauhan/StashBox.git
+cd StashBox
+```
+
+Already have the project? Open a terminal in its folder and skip this step.
+
+**2. Install what the app needs:**
+
+```sh
+npm install
+```
+
+**3. Start the app:**
+
+```sh
 node scripts/start-local.mjs
 ```
 
-Startup applies pending additive migrations and retains data in .wrangler/state/. For an already initialized checkout, expose the development server to a phone on the same hotspot/network:
+Wait for startup to finish, then open **[localhost:5173](http://localhost:5173)** in your browser. The first start may take a little longer while the app prepares its local database.
 
-```powershell
+Press **Ctrl+C** in the terminal to stop it. Your saved data stays on your computer.
+
+### Try it on your phone
+
+After running the app once, stop it with Ctrl+C. Connect your phone and computer to the same Wi-Fi or hotspot, then run:
+
+```sh
 npm run dev -- --hostname 0.0.0.0
 ```
 
-Open http://127.0.0.1:5173/ on the computer, or http://<computer-network-IP>:5173/ on the phone. Stop with Ctrl+C. Use /?demo=1 for clearly labelled fictional listings; demo data is never inserted into the database.
+Open the **Network** address printed in the terminal on your phone. Keep the terminal running while you test.
 
-## Where to work
+## Making changes
 
-- app/ — thin page and API adapters.
-- src/features/ — catalogue, hostels, stash, dashboard, Pawn, payments, moderation and support.
-- src/shell/ — navigation and cross-screen state.
-- src/domain/ — shared types and pure pricing, moderation and bookkeeping rules.
-- src/shared/ — reusable UI, motion, API transport and image compression.
-- src/server/ — request handling and database/storage services.
-- src/styles/ — one ordered stylesheet entrypoint.
-- db/ and drizzle/ — schema and additive migrations.
-- tests/ — regression coverage, with shared browser setup in tests/helpers/.
+Most of the app is inside `src/`:
 
-See [the architecture guide](docs/architecture.md) for ownership, dependency boundaries, styling order and test coverage.
+- `src/features/` — screens and features, including snacks, Pawn Shop, and moderation.
+- `src/styles/` — colours, spacing, and layouts.
+- `src/server/` — accounts, listings, and saved data.
 
-## Routes
+For a fuller folder map and testing instructions, see the [developer guide](docs/architecture.md).
 
-| Route           | Screen                                              |
-| --------------- | --------------------------------------------------- |
-| /               | Hostel chooser or selected hostel's snack directory |
-| /stash          | Public stock management                             |
-| /dashboard      | Private Stasher notebook                            |
-| /moderator      | StashBox moderation                                 |
-| /pawn           | The Pawn Shop                                       |
-| /pawn/deploy    | Item creation, own listings and optional payment QR |
-| /pawn/rules     | Pawn community rules                                |
-| /pawn/moderator | Separate Pawn moderation                            |
-
-Older Pawn links remain compatible and canonicalize to /pawn. The selected hostel is remembered in the browser and highlighted on return. Closed snack stashes are completely hidden; Pawn availability is independent.
-
-## Check changes
-
-```powershell
-npm run typecheck
-npm run test:unit
-npm run format:check
-npm run build
-node tests/integration.mjs
-node tests/experiences-browser.mjs
-node tests/mobile-refinements.mjs
-node tests/menu-motion.mjs
-node tests/payment-hero-layout.mjs
-```
-
-API/browser suites require the initialized local server. Run them sequentially. Browser setup and its executable override are documented in the architecture guide. ESLint remains available through npm run lint; existing broad API types and React effect patterns still need a separate typing/lint pass.
-
-## Maintainer and private data
-
-Create an account and use Help & account recovery with the private key from .sites-runtime/maintainer-setup.txt. Only the correct setup key can claim the first maintainer account. Account recovery requires identity verification and issues a temporary password; existing passwords cannot be viewed.
-
-Never commit .dev.vars, .sites-runtime/, .wrangler/, local databases or generated outputs. Keep the local database and R2 uploads when cleaning source files. Never edit an applied migration. Original packet photos and provenance remain in public/packets/ and src/domain/packet-library.json.
-
-See [GIT_GUIDE.md](GIT_GUIDE.md) for Git checkpoints and privacy checks.
+**Keep your local data private.** Don’t upload `.dev.vars` or `.wrangler/` to GitHub. Don’t delete `.wrangler/` unless you intend to erase your local accounts, listings, and uploads.
