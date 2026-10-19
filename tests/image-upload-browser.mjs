@@ -1,7 +1,89 @@
-import {createRequire} from 'node:module';import {fileURLToPath} from 'node:url';import {readFileSync} from 'node:fs';import ts from 'typescript';import assert from 'node:assert/strict';
-const require=createRequire('C:/Users/Punyam/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/');const {chromium}=require('playwright');
-const browser=await chromium.launch({headless:true,executablePath:fileURLToPath(new URL('../.sites-runtime/browsers/chromium-1234/chrome-win64/chrome.exe',import.meta.url))});
-try{const page=await browser.newPage();const source=ts.transpileModule(readFileSync('app/image-upload.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
- const result=await page.evaluate(async source=>{const m=await import('data:text/javascript;base64,'+btoa(source));const c=document.createElement('canvas');c.width=2400;c.height=2200;const x=c.getContext('2d');const noise=x.createImageData(c.width,c.height);let n=7;for(let i=0;i<noise.data.length;i+=4){n=(n*1664525+1013904223)>>>0;noise.data[i]=n&255;noise.data[i+1]=(n>>>8)&255;noise.data[i+2]=(n>>>16)&255;noise.data[i+3]=255;}x.putImageData(noise,0,0);const png=await new Promise(r=>c.toBlob(r,'image/png'));const file=new File([png],'large.png',{type:'image/png'});const webp=await m.compressPhoto(file);const decoded=await createImageBitmap(webp);const r={source:file.size,stored:webp.size,type:webp.type,width:decoded.width,height:decoded.height};decoded.close();let rejected=false;try{await m.compressPhoto(new File([new Uint8Array(m.MAX_SOURCE_PHOTO_BYTES+1)],'too-big.png',{type:'image/png'}));}catch{rejected=true;}c.width=600;c.height=600;x.fillStyle='white';x.fillRect(0,0,600,600);x.fillStyle='black';for(let y=20;y<580;y+=20)for(let z=20;z<580;z+=20)if((z+y)%60)x.fillRect(z,y,15,15);const qrPng=await new Promise(r=>c.toBlob(r,'image/png'));const qr=await m.compressPhoto(new File([qrPng],'qr.png',{type:'image/png'}),{qr:true});return {...r,rejected,qrSize:qr.size,qrType:qr.type};},source);
- assert(result.source>12000000&&result.source<=30*1024*1024,'Accepts source photos larger than old 12 MB limit');assert.equal(result.type,'image/webp');assert(result.stored<=200000);assert(result.width<=1600&&result.height<=1600);assert(result.stored<result.source/10);assert(result.rejected);assert.equal(result.qrType,'image/webp');assert(result.qrSize<=200000);console.log('PASS resize + adaptive WebP compression:',JSON.stringify(result));
-}finally{await browser.close();}
+import { chromium, browserExecutable } from "./helpers/browser.mjs";
+
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+import assert from "node:assert/strict";
+
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: browserExecutable,
+});
+try {
+  const page = await browser.newPage();
+  const source = ts.transpileModule(
+    readFileSync("src/shared/lib/image-upload.ts", "utf8"),
+    { compilerOptions: { module: ts.ModuleKind.ESNext } },
+  ).outputText;
+  const result = await page.evaluate(async (source) => {
+    const m = await import("data:text/javascript;base64," + btoa(source));
+    const c = document.createElement("canvas");
+    c.width = 2400;
+    c.height = 2200;
+    const x = c.getContext("2d");
+    const noise = x.createImageData(c.width, c.height);
+    let n = 7;
+    for (let i = 0; i < noise.data.length; i += 4) {
+      n = (n * 1664525 + 1013904223) >>> 0;
+      noise.data[i] = n & 255;
+      noise.data[i + 1] = (n >>> 8) & 255;
+      noise.data[i + 2] = (n >>> 16) & 255;
+      noise.data[i + 3] = 255;
+    }
+    x.putImageData(noise, 0, 0);
+    const png = await new Promise((r) => c.toBlob(r, "image/png"));
+    const file = new File([png], "large.png", { type: "image/png" });
+    const webp = await m.compressPhoto(file);
+    const decoded = await createImageBitmap(webp);
+    const r = {
+      source: file.size,
+      stored: webp.size,
+      type: webp.type,
+      width: decoded.width,
+      height: decoded.height,
+    };
+    decoded.close();
+    let rejected = false;
+    try {
+      await m.compressPhoto(
+        new File(
+          [new Uint8Array(m.MAX_SOURCE_PHOTO_BYTES + 1)],
+          "too-big.png",
+          { type: "image/png" },
+        ),
+      );
+    } catch {
+      rejected = true;
+    }
+    c.width = 600;
+    c.height = 600;
+    x.fillStyle = "white";
+    x.fillRect(0, 0, 600, 600);
+    x.fillStyle = "black";
+    for (let y = 20; y < 580; y += 20)
+      for (let z = 20; z < 580; z += 20)
+        if ((z + y) % 60) x.fillRect(z, y, 15, 15);
+    const qrPng = await new Promise((r) => c.toBlob(r, "image/png"));
+    const qr = await m.compressPhoto(
+      new File([qrPng], "qr.png", { type: "image/png" }),
+      { qr: true },
+    );
+    return { ...r, rejected, qrSize: qr.size, qrType: qr.type };
+  }, source);
+  assert(
+    result.source > 12000000 && result.source <= 30 * 1024 * 1024,
+    "Accepts source photos larger than old 12 MB limit",
+  );
+  assert.equal(result.type, "image/webp");
+  assert(result.stored <= 200000);
+  assert(result.width <= 1600 && result.height <= 1600);
+  assert(result.stored < result.source / 10);
+  assert(result.rejected);
+  assert.equal(result.qrType, "image/webp");
+  assert(result.qrSize <= 200000);
+  console.log(
+    "PASS resize + adaptive WebP compression:",
+    JSON.stringify(result),
+  );
+} finally {
+  await browser.close();
+}

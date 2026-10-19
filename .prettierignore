@@ -1,0 +1,10 @@
+.sites-runtime
+.wrangler
+.next
+.vinext
+dist
+build
+outputs
+node_modules
+package-lock.json
+src/domain/packet-library.json

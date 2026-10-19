@@ -1,2 +1,4 @@
-import Home from '../stashbox';
-export default function PawnStore(){return <Home initialPawnSection="all"/>;}
+import Home from "../../src/shell/app-shell";
+export default function PawnStore() {
+  return <Home initialPawnSection="all" />;
+}

@@ -19,7 +19,7 @@ Run these commands inside the `stashbox` folder. Git tracks source files. It doe
 ```powershell
 git status
 git diff
-git add app/stashbox.tsx app/stashbox.css
+git add src/shell/app-shell.tsx src/styles/stashbox.css
 git diff --staged
 git commit -m "Improve snack card layout"
 git push
@@ -50,7 +50,7 @@ git push
 ## Unstage without losing edits
 
 ```powershell
-git restore --staged app/stashbox.tsx
+git restore --staged src/shell/app-shell.tsx
 ```
 
 This removes the file from the planned checkpoint. Your edits remain in the file.
@@ -58,7 +58,7 @@ This removes the file from the planned checkpoint. Your edits remain in the file
 ## Inspect an old version without changing the current app
 
 ```powershell
-git show COMMIT_ID:app/stashbox.tsx
+git show COMMIT_ID:src/shell/app-shell.tsx
 ```
 
 ## Save an experiment on a branch

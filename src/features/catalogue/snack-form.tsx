@@ -1,0 +1,600 @@
+"use client";
+import { Camera, Check, LoaderCircle, Plus, Search } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { asciiDisplay, asciiText, checkContent } from "../../domain/moderation";
+import {
+  libraryPhoto,
+  normalizePacketName,
+  PACKET_LIBRARY,
+} from "../../domain/packet-library";
+import { CATEGORIES, type OwnListing, type Photo } from "../../domain/shared";
+import { compressPhoto, UPLOAD_HINT } from "../../shared/lib/image-upload";
+import { PricingFields, readPricing } from "./pricing-fields";
+import { PacketPhoto, PhotoCredit } from "./product-photos";
+type ProductOption = {
+  name: string;
+  category: string;
+  aliases?: string[];
+  variants?: { container: string; volumeMl: number }[];
+};
+const CONTAINERS = [
+  "Bottle",
+  "Can",
+  "Carton",
+  "Cup",
+  "Pouch",
+  "Glass",
+  "Tetra Pak",
+];
+export function SnackForm({
+  initial,
+  onSave,
+}: {
+  initial?: OwnListing;
+  onSave: (data: any) => Promise<void>;
+}) {
+  const [products, setProducts] = useState<ProductOption[]>(PACKET_LIBRARY),
+    [typed, setTyped] = useState(initial?.name || ""),
+    [category, setCategory] = useState(initial?.category || CATEGORIES[1]);
+  const [opened, setOpened] = useState(false),
+    [active, setActive] = useState(0),
+    [committed, setCommitted] = useState(!!initial);
+  const [mrp, setMrp] = useState(initial?.mrp ? String(initial.mrp / 100) : ""),
+    [price, setPrice] = useState(initial ? String(initial.price / 100) : "");
+  const [container, setContainer] = useState(
+      initial?.container && !CONTAINERS.includes(initial.container)
+        ? "Other"
+        : initial?.container || "",
+    ),
+    [otherContainer, setOtherContainer] = useState(
+      initial?.container && !CONTAINERS.includes(initial.container)
+        ? initial.container
+        : "",
+    ),
+    [volume, setVolume] = useState(
+      initial?.volume_ml ? String(initial.volume_ml) : "",
+    ),
+    [unit, setUnit] = useState("ml");
+  const [photoReady, setPhotoReady] = useState(false);
+  const [photo, setPhoto] = useState<(Photo & { name: string }) | null>(
+      initial?.photo_id ? initial : null,
+    ),
+    [working, setWorking] = useState(false),
+    [message, setMessage] = useState(""),
+    [error, setError] = useState(""),
+    [rights, setRights] = useState(false);
+  const serial = useRef(0),
+    inputRef = useRef<HTMLInputElement>(null),
+    suggestionId = useId();
+  const normalized = normalizePacketName(typed),
+    known = products.find(
+      (p) =>
+        normalizePacketName(p.name) === normalized ||
+        p.aliases?.some((a) => normalizePacketName(a) === normalized),
+    );
+  const name = known?.name || typed.trim().replace(/\s+/g, " "),
+    chosenCategory = known?.category || category,
+    drink = chosenCategory === "Drinks";
+  const suggestions = normalized
+    ? products
+        .filter((p) =>
+          normalized
+            .split(" ")
+            .every((t) =>
+              normalizePacketName(
+                `${p.name} ${(p.aliases || []).join(" ")}`,
+              ).includes(t),
+            ),
+        )
+        .slice(0, 7)
+    : products.slice(0, 7);
+  const addNew = !!normalized && !known,
+    suggestionCount = suggestions.length + (addNew ? 1 : 0);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/products")
+      .then(async (r) => {
+        if (!r.ok) return;
+        const d: any = await r.json();
+        if (live) setProducts(d.products);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  useEffect(() => {
+    const version = ++serial.current;
+    setPhotoReady(false);
+    setMessage("");
+    const prepared = libraryPhoto(name);
+    setPhoto(
+      initial && initial.name === name && initial.photo_id
+        ? initial
+        : prepared
+          ? { ...prepared, name }
+          : null,
+    );
+    if (!known && !committed) return;
+    if (name.length < 2) return;
+    const timer = setTimeout(async () => {
+      try {
+        const r = await fetch(
+          `/api/photos/library?name=${encodeURIComponent(name)}&category=${encodeURIComponent(chosenCategory)}`,
+        );
+        if (!r.ok) return;
+        const data: any = await r.json();
+        if (version === serial.current) {
+          setPhoto(data.defaultPhoto ? { ...data.defaultPhoto, name } : null);
+          setPhotoReady(true);
+        }
+      } catch {}
+    }, 200);
+    return () => {
+      clearTimeout(timer);
+      serial.current++;
+    };
+  }, [name, chosenCategory, committed]);
+  function choose(p?: ProductOption) {
+    if (p) {
+      setTyped(asciiDisplay(p.name));
+      setCategory(p.category);
+    } else setTyped(name);
+    setOpened(false);
+    setCommitted(true);
+    setActive(0);
+  }
+  async function upload(file: File) {
+    if (name.length < 2) {
+      setError("Enter the product name first.");
+      return;
+    }
+    const version = ++serial.current;
+    setWorking(true);
+    setError("");
+    try {
+      const blob = await compressPhoto(file),
+        r = await fetch(
+          `/api/photos/upload?name=${encodeURIComponent(name)}&category=${encodeURIComponent(chosenCategory)}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": blob.type,
+              "X-Photo-Rights": "confirmed",
+            },
+            body: blob,
+          },
+        );
+      const data: any = await r.json();
+      if (!r.ok) throw new Error(data.error || "Upload failed.");
+      if (version === serial.current) {
+        setPhoto({ ...data.photo, name });
+        setMessage(
+          "Photo saved to the shared library. The maintainer can change the shared default.",
+        );
+      }
+    } catch (e) {
+      if (version === serial.current) setError((e as Error).message);
+    } finally {
+      setWorking(false);
+    }
+  }
+  return (
+    <form
+      className="form snack-form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const pricing = readPricing(e.currentTarget);
+        if (working) return;
+        setWorking(true);
+        setError("");
+        try {
+          if (!known) {
+            asciiText(typed, "Product name", 70);
+            checkContent(typed);
+          }
+          await onSave({
+            ...pricing,
+            name,
+            category: chosenCategory,
+            mrp: Math.round(Number(mrp) * 100),
+            price: Math.round(Number(price) * 100),
+            photoId: photo?.photo_id || null,
+            photoChoice: "none",
+            available: initial ? !!initial.available : true,
+            ...(drink
+              ? {
+                  container: container === "Other" ? otherContainer : container,
+                  volumeMl: Math.round(
+                    Number(volume) * (unit === "L" ? 1000 : 1),
+                  ),
+                }
+              : {}),
+          });
+        } catch (e) {
+          setError((e as Error).message);
+        } finally {
+          setWorking(false);
+        }
+      }}
+    >
+      <div className="product-autocomplete">
+        <label htmlFor={suggestionId + "-input"}>
+          Product name (include flavour)
+        </label>
+        <div className="name-input">
+          <Search size={17} />
+          <input
+            id={suggestionId + "-input"}
+            ref={inputRef}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={opened}
+            aria-controls={suggestionId}
+            aria-activedescendant={
+              opened && suggestionCount
+                ? `${suggestionId}-${Math.min(active, suggestionCount - 1)}`
+                : undefined
+            }
+            value={typed}
+            disabled={!!initial || working}
+            required
+            minLength={2}
+            maxLength={70}
+            autoComplete="off"
+            placeholder="Start typing: Oreo, Kurkure, Coke…"
+            onChange={(e) => {
+              setTyped(e.target.value);
+              setOpened(true);
+              setCommitted(false);
+              setActive(0);
+            }}
+            onFocus={() => setOpened(true)}
+            onBlur={() => {
+              setTimeout(() => setOpened(false), 120);
+              setCommitted(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setOpened(false);
+                return;
+              }
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                setOpened(true);
+                setActive((a) =>
+                  suggestionCount
+                    ? (a + (e.key === "ArrowDown" ? 1 : -1) + suggestionCount) %
+                      suggestionCount
+                    : 0,
+                );
+              }
+              if (e.key === "Enter" && opened && suggestionCount) {
+                e.preventDefault();
+                choose(suggestions[Math.min(active, suggestionCount - 1)]);
+              }
+            }}
+          />
+        </div>
+        {opened && !initial && (
+          <div
+            id={suggestionId}
+            className="product-suggestions"
+            role="listbox"
+            aria-label="Product suggestions"
+          >
+            {suggestions.map((p, i) => (
+              <button
+                type="button"
+                role="option"
+                id={`${suggestionId}-${i}`}
+                aria-selected={active === i}
+                key={p.name + p.category}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => choose(p)}
+              >
+                <span className="suggestion-image">
+                  <PacketPhoto
+                    item={{
+                      ...libraryPhoto(p.name),
+                      photo_id: libraryPhoto(p.name)?.photo_id || null,
+                      name: p.name,
+                      category: p.category,
+                    }}
+                  />
+                </span>
+                <span>
+                  <strong>{p.name}</strong>
+                  <small>{p.category}</small>
+                </span>
+                {known?.name === p.name && <Check size={15} />}
+              </button>
+            ))}
+            {addNew && (
+              <button
+                type="button"
+                role="option"
+                id={`${suggestionId}-${suggestions.length}`}
+                aria-selected={active === suggestions.length}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => choose()}
+              >
+                <Plus size={18} />
+                <span>
+                  Add “{name}” as a new product
+                  <small>Saved for everyone when you add your stock</small>
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {!known && name.length >= 2 && (
+        <>
+          <p className="new-product-note">
+            <Plus size={14} />
+            New product · It will appear in suggestions after saving.
+          </p>
+          <label>
+            Category
+            <select
+              name="category"
+              value={category}
+              disabled={working || !!initial}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              {CATEGORIES.slice(1).map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
+      {drink && (
+        <fieldset className="drink-fields">
+          <legend>Choose the drink variant</legend>
+          {!!known?.variants?.length && (
+            <div className="drink-variants">
+              {known.variants.map((v) => (
+                <button
+                  type="button"
+                  key={v.container + v.volumeMl}
+                  disabled={working}
+                  onClick={() => {
+                    setContainer(
+                      CONTAINERS.includes(v.container) ? v.container : "Other",
+                    );
+                    setOtherContainer(
+                      CONTAINERS.includes(v.container) ? "" : v.container,
+                    );
+                    setVolume(String(v.volumeMl));
+                    setUnit("ml");
+                  }}
+                >
+                  {v.container} ·{" "}
+                  {v.volumeMl >= 1000
+                    ? `${v.volumeMl / 1000} L`
+                    : `${v.volumeMl} ml`}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="form-grid">
+            <label>
+              Container
+              <select
+                aria-label="Container"
+                required
+                value={
+                  CONTAINERS.includes(container) ||
+                  container === "Other" ||
+                  !container
+                    ? container
+                    : "Other"
+                }
+                disabled={working}
+                onChange={(e) => setContainer(e.target.value)}
+              >
+                <option value="" disabled>
+                  Choose container
+                </option>
+                {CONTAINERS.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+                <option>Other</option>
+              </select>
+            </label>
+            <label>
+              Volume
+              <div className="volume-input">
+                <input
+                  aria-label="Drink volume"
+                  type="number"
+                  required
+                  min={unit === "L" ? 0.02 : 20}
+                  max={unit === "L" ? 20 : 20000}
+                  step={unit === "L" ? 0.001 : 1}
+                  value={volume}
+                  disabled={working}
+                  onChange={(e) => setVolume(e.target.value)}
+                  placeholder="e.g. 250"
+                />
+                <select
+                  aria-label="Volume unit"
+                  value={unit}
+                  disabled={working}
+                  onChange={(e) => setUnit(e.target.value)}
+                >
+                  <option>ml</option>
+                  <option>L</option>
+                </select>
+              </div>
+            </label>
+          </div>
+          {container === "Other" && (
+            <label>
+              Container name
+              <input
+                required
+                maxLength={24}
+                value={otherContainer}
+                onChange={(e) => setOtherContainer(e.target.value)}
+                placeholder="e.g. Glass bottle"
+              />
+            </label>
+          )}
+          <p>
+            Can, bottle and volume stay separate in price comparisons. The brand
+            image is shared.
+          </p>
+        </fieldset>
+      )}
+      <div className="form-grid">
+        <label>
+          Printed MRP (₹)
+          <input
+            name="mrp"
+            type="number"
+            required
+            min="1"
+            max="1000"
+            step="0.01"
+            value={mrp}
+            disabled={working}
+            onChange={(e) => setMrp(e.target.value)}
+            placeholder="e.g. 20"
+          />
+        </label>
+        <label>
+          Your selling price (₹)
+          <input
+            name="price"
+            type="number"
+            required
+            min="1"
+            max="1000"
+            step="0.01"
+            value={price}
+            disabled={working}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="e.g. 25"
+          />
+        </label>
+      </div>
+      <section className="photo-picker" aria-label="Packet photo">
+        <div className="photo-picker-preview">
+          <PacketPhoto
+            item={
+              photo
+                ? { ...photo, category: chosenCategory }
+                : {
+                    name: name || "Your snack",
+                    category: chosenCategory,
+                    photo_id: null,
+                  }
+            }
+          />
+        </div>
+        <div>
+          <strong>
+            {photo
+              ? "Photo selected automatically"
+              : "Your packet illustration"}
+          </strong>
+          <p className="photo-status" role="status">
+            {message ||
+              (photo
+                ? "Ready from the shared product library."
+                : name.length >= 2
+                  ? "Take or upload a photo for this new product. Skip it and this illustration will appear on your listing."
+                  : "Enter a product name to select its photo.")}
+          </p>
+          <PhotoCredit item={photo || { photo_id: null }} />
+        </div>
+      </section>
+      {!photo && photoReady && name.length >= 2 && (
+        <details className="form-section photo-options">
+          <summary>
+            <Camera size={18} />
+            Add a photo · optional
+          </summary>
+          <div className="form-section-body">
+            <p className="field-hint">{UPLOAD_HINT}</p>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={rights}
+                onChange={(e) => setRights(e.target.checked)}
+              />
+              This is my photo, or I have permission to share it in StashBox’s
+              product library.
+            </label>
+            <div className="photo-upload-actions">
+              <label className="upload-label">
+                <Camera size={17} />
+                Take a photo
+                <input
+                  aria-label="Take a packet photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/avif"
+                  capture="environment"
+                  disabled={!rights || working || name.length < 2}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void upload(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              <label className="upload-label">
+                Upload a photo
+                <input
+                  aria-label="Upload your packet photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/avif"
+                  disabled={!rights || working || name.length < 2}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void upload(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+        </details>
+      )}
+      {photo && (
+        <p className="shared-photo-lock">
+          <Check size={16} />
+          Product photo selected. Contact the moderator if it needs updating.
+        </p>
+      )}
+      <PricingFields initial={initial} />
+      <div className="form-submit-bar">
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button
+          className="button primary full"
+          type="submit"
+          disabled={working || name.length < 2}
+        >
+          {working ? (
+            <>
+              <LoaderCircle size={17} className="spin" />
+              Please wait…
+            </>
+          ) : (
+            <>
+              <Plus size={17} />
+              {initial ? "Save snack" : "Add to my stash"}
+            </>
+          )}
+        </button>
+      </div>
+    </form>
+  );
+}

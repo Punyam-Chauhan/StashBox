@@ -1,14 +1,213 @@
-import {createRequire} from 'node:module';import {fileURLToPath} from 'node:url';import assert from 'node:assert/strict';
-const require=createRequire('C:/Users/Punyam/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/'),{chromium}=require('playwright'),browser=await chromium.launch({headless:true,executablePath:fileURLToPath(new URL('../.sites-runtime/browsers/chromium-1234/chrome-win64/chrome.exe',import.meta.url))});
-const page=await browser.newPage({viewport:{width:1600,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));const base='http://127.0.0.1:5173';
-try{
-const ready=page.waitForResponse(r=>r.url().endsWith('/api/hostels'));await page.goto(base+'/?choose=hostel');await ready;await page.locator('.hostel-card').first().waitFor();const mandakini=page.locator('.hostel-card').filter({hasText:'Mandakini'}),tagore=page.locator('.hostel-card').filter({hasText:'Tagore'});assert.equal(await mandakini.evaluate(e=>getComputedStyle(e).backgroundImage),await tagore.evaluate(e=>getComputedStyle(e).backgroundImage),'Mandakini uses the same neutral card background');
-await page.locator('.hostel-card').filter({hasText:'Patel'}).click();await page.getByRole('heading',{name:'Patel Bhawan',exact:true}).waitFor();await page.getByRole('button',{name:'Choose hostel',exact:true}).click();let selected=page.locator('.hostel-selected');await selected.waitFor();assert((await selected.innerText()).includes('Patel'));assert.equal(await selected.getAttribute('aria-pressed'),'true');assert.equal(await page.evaluate(()=>localStorage.getItem('stashbox.hostel')),'patel');assert.equal(new URL(page.url()).searchParams.get('choose'),'hostel');
-await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.locator('.hostel-grid').waitFor();await page.reload();await page.locator('.hostel-selected').waitFor();assert((await page.locator('.hostel-selected').innerText()).includes('Patel'));assert.equal(await page.locator('.hostel-card[aria-pressed=true]').count(),1);await page.locator('.hostel-choices').screenshot({path:'outputs/remembered-hostel-selection.png'});
-await page.locator('.hostel-selected').click();await page.getByRole('heading',{name:'Patel Bhawan',exact:true,level:1}).waitFor();assert.equal(await page.locator('.hostel-grid').count(),0,'Choosing opens listings immediately');await page.goto(base+'/');await page.getByRole('heading',{name:'Patel Bhawan',exact:true,level:1}).waitFor();assert.equal(new URL(page.url()).searchParams.get('hostel'),'patel','Normal return opens saved hostel directly');await page.locator('.desktop-hostel-switch').click();await page.locator('.hostel-selected').waitFor();assert((await page.locator('.hostel-selected').innerText()).includes('Patel'));
-await page.getByRole('button',{name:'Find a snack',exact:false}).click();await page.getByRole('heading',{name:'Patel Bhawan',exact:true,level:1}).waitFor();assert.equal(new URL(page.url()).searchParams.has('choose'),false,'Find a snack leaves the chooser');await page.getByRole('button',{name:'Choose hostel',exact:true}).click();await page.locator('.hostel-selected').waitFor();await page.getByRole('button',{name:'Find a snack',exact:false}).click();await page.getByRole('heading',{name:'Patel Bhawan',exact:true,level:1}).waitFor();await page.locator('.desktop-hostel-switch').click();await page.locator('.hostel-selected').waitFor();
-await page.locator('.sidebar-bottom>button').click();let dialog=page.getByRole('dialog');assert(await dialog.evaluate(e=>e.classList.contains('support-theme-stashbox')));const stash=await dialog.evaluate(e=>getComputedStyle(e).getPropertyValue('--support-accent').trim());assert.equal(stash,'#ff783d');assert((await dialog.locator('h3').evaluate(e=>getComputedStyle(e).fontFamily)).includes('DM Sans'));assert.equal(await dialog.locator('.whatsapp-logo').count(),1);assert(!(await dialog.locator('.support-whatsapp').innerText()).includes('WhatsApp'));assert.equal(await dialog.locator('.support-copy').evaluate(e=>parseFloat(getComputedStyle(e).fontSize)),16);await dialog.screenshot({path:'outputs/support-stashbox-theme.png'});await dialog.getByRole('button',{name:'Close dialog'}).click();
-await page.getByRole('button',{name:'The Pawn Shop',exact:true}).click();await page.locator('.pawn-sidebar-brand').waitFor();await page.locator('.sidebar-bottom>button').click();dialog=page.getByRole('dialog');assert(await dialog.evaluate(e=>e.classList.contains('support-theme-pawn')));assert.notEqual(await dialog.evaluate(e=>getComputedStyle(e).getPropertyValue('--support-accent').trim()),stash);assert((await dialog.locator('h3').evaluate(e=>getComputedStyle(e).fontFamily)).includes('Georgia'));assert(decodeURIComponent(await dialog.getByRole('link',{name:'Report a bug? WhatsApp Punyam'}).getAttribute('href')).includes('The Pawn Shop'));await dialog.screenshot({path:'outputs/support-pawn-theme.png'});
-await page.setViewportSize({width:390,height:844});assert(await dialog.evaluate(e=>e.scrollWidth<=e.clientWidth+1));await dialog.screenshot({path:'outputs/support-pawn-mobile.png'});await dialog.getByRole('button',{name:'Close dialog'}).click();await page.getByRole('button',{name:'Toggle menu'}).click();await page.locator('.pawn-back-link').click();assert.equal(new URL(page.url()).searchParams.has('app'),false);await page.getByRole('button',{name:'Toggle menu'}).click();await page.getByRole('button',{name:'Choose hostel',exact:true}).click();await page.locator('.hostel-selected').waitFor();await page.getByRole('button',{name:'Toggle menu'}).click();await page.getByRole('button',{name:'Find a snack',exact:false}).click();await page.getByRole('heading',{name:'Patel Bhawan',exact:true,level:1}).waitFor();assert.equal(await page.locator('.sidebar.mobile-open').count(),0);await page.getByRole('button',{name:'Toggle menu'}).click();await page.locator('.sidebar-bottom>button').click();dialog=page.getByRole('dialog');assert(await dialog.evaluate(e=>e.classList.contains('support-theme-stashbox')));assert(await dialog.evaluate(e=>e.scrollWidth<=e.clientWidth+1));await dialog.screenshot({path:'outputs/support-stashbox-mobile.png'});assert.equal(errors.length,0,errors.join('\n'));
-console.log('PASS contextual support themes, readable type, WhatsApp logo, neutral Mandakini, remembered/accessible hostel highlight, chooser reload/focus and mobile layout');
-}catch(e){console.log('UI failure state',await page.evaluate(()=>({url:location.href,stored:localStorage.getItem('stashbox.hostel'),cards:[...document.querySelectorAll('.hostel-card')].map(e=>({text:e.textContent,selected:e.getAttribute('aria-pressed')}))})));await page.screenshot({path:'outputs/support-selection-failure.png',fullPage:true});throw e;}finally{await browser.close();}
+import { chromium, browserExecutable } from "./helpers/browser.mjs";
+
+import assert from "node:assert/strict";
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: browserExecutable,
+});
+const page = await browser.newPage({ viewport: { width: 1600, height: 900 } }),
+  errors = [];
+page.on("pageerror", (e) => errors.push(e.message));
+const base = "http://127.0.0.1:5173";
+try {
+  const ready = page.waitForResponse((r) => r.url().endsWith("/api/hostels"));
+  await page.goto(base + "/?choose=hostel");
+  await ready;
+  await page.locator(".hostel-card").first().waitFor();
+  const mandakini = page
+      .locator(".hostel-card")
+      .filter({ hasText: "Mandakini" }),
+    tagore = page.locator(".hostel-card").filter({ hasText: "Tagore" });
+  assert.equal(
+    await mandakini.evaluate((e) => getComputedStyle(e).backgroundImage),
+    await tagore.evaluate((e) => getComputedStyle(e).backgroundImage),
+    "Mandakini uses the same neutral card background",
+  );
+  await page.locator(".hostel-card").filter({ hasText: "Patel" }).click();
+  await page
+    .getByRole("heading", { name: "Patel Bhawan", exact: true })
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Choose hostel", exact: true })
+    .click();
+  let selected = page.locator(".hostel-selected");
+  await selected.waitFor();
+  assert((await selected.innerText()).includes("Patel"));
+  assert.equal(await selected.getAttribute("aria-pressed"), "true");
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem("stashbox.hostel")),
+    "patel",
+  );
+  assert.equal(new URL(page.url()).searchParams.get("choose"), "hostel");
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.locator(".hostel-grid").waitFor();
+  await page.reload();
+  await page.locator(".hostel-selected").waitFor();
+  assert(
+    (await page.locator(".hostel-selected").innerText()).includes("Patel"),
+  );
+  assert.equal(
+    await page.locator(".hostel-card[aria-pressed=true]").count(),
+    1,
+  );
+  await page
+    .locator(".hostel-choices")
+    .screenshot({ path: "outputs/remembered-hostel-selection.png" });
+  await page.locator(".hostel-selected").click();
+  await page
+    .getByRole("heading", { name: "Patel Bhawan", exact: true, level: 1 })
+    .waitFor();
+  assert.equal(
+    await page.locator(".hostel-grid").count(),
+    0,
+    "Choosing opens listings immediately",
+  );
+  await page.goto(base + "/");
+  await page
+    .getByRole("heading", { name: "Patel Bhawan", exact: true, level: 1 })
+    .waitFor();
+  assert.equal(
+    new URL(page.url()).searchParams.get("hostel"),
+    "patel",
+    "Normal return opens saved hostel directly",
+  );
+  await page.locator(".desktop-hostel-switch").click();
+  await page.locator(".hostel-selected").waitFor();
+  assert(
+    (await page.locator(".hostel-selected").innerText()).includes("Patel"),
+  );
+  await page
+    .getByRole("button", { name: "Find a snack", exact: false })
+    .click();
+  await page
+    .getByRole("heading", { name: "Patel Bhawan", exact: true, level: 1 })
+    .waitFor();
+  assert.equal(
+    new URL(page.url()).searchParams.has("choose"),
+    false,
+    "Find a snack leaves the chooser",
+  );
+  await page
+    .getByRole("button", { name: "Choose hostel", exact: true })
+    .click();
+  await page.locator(".hostel-selected").waitFor();
+  await page
+    .getByRole("button", { name: "Find a snack", exact: false })
+    .click();
+  await page
+    .getByRole("heading", { name: "Patel Bhawan", exact: true, level: 1 })
+    .waitFor();
+  await page.locator(".desktop-hostel-switch").click();
+  await page.locator(".hostel-selected").waitFor();
+  await page.locator(".sidebar-bottom>button").click();
+  let dialog = page.getByRole("dialog");
+  assert(
+    await dialog.evaluate((e) =>
+      e.classList.contains("support-theme-stashbox"),
+    ),
+  );
+  const stash = await dialog.evaluate((e) =>
+    getComputedStyle(e).getPropertyValue("--support-accent").trim(),
+  );
+  assert.equal(stash, "#ff783d");
+  assert(
+    (
+      await dialog.locator("h3").evaluate((e) => getComputedStyle(e).fontFamily)
+    ).includes("DM Sans"),
+  );
+  assert.equal(await dialog.locator(".whatsapp-logo").count(), 1);
+  assert(
+    !(await dialog.locator(".support-whatsapp").innerText()).includes(
+      "WhatsApp",
+    ),
+  );
+  assert.equal(
+    await dialog
+      .locator(".support-copy")
+      .evaluate((e) => parseFloat(getComputedStyle(e).fontSize)),
+    16,
+  );
+  await dialog.screenshot({ path: "outputs/support-stashbox-theme.png" });
+  await dialog.getByRole("button", { name: "Close dialog" }).click();
+  await page
+    .getByRole("button", { name: "The Pawn Shop", exact: true })
+    .click();
+  await page.locator(".pawn-sidebar-brand").waitFor();
+  await page.locator(".sidebar-bottom>button").click();
+  dialog = page.getByRole("dialog");
+  assert(
+    await dialog.evaluate((e) => e.classList.contains("support-theme-pawn")),
+  );
+  assert.notEqual(
+    await dialog.evaluate((e) =>
+      getComputedStyle(e).getPropertyValue("--support-accent").trim(),
+    ),
+    stash,
+  );
+  assert(
+    (
+      await dialog.locator("h3").evaluate((e) => getComputedStyle(e).fontFamily)
+    ).includes("Georgia"),
+  );
+  assert(
+    decodeURIComponent(
+      await dialog
+        .getByRole("link", { name: "Report a bug? WhatsApp Punyam" })
+        .getAttribute("href"),
+    ).includes("The Pawn Shop"),
+  );
+  await dialog.screenshot({ path: "outputs/support-pawn-theme.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert(await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth + 1));
+  await dialog.screenshot({ path: "outputs/support-pawn-mobile.png" });
+  await dialog.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Toggle menu" }).click();
+  await page.locator(".pawn-back-link").click();
+  assert.equal(new URL(page.url()).searchParams.has("app"), false);
+  await page.getByRole("button", { name: "Toggle menu" }).click();
+  await page
+    .getByRole("button", { name: "Choose hostel", exact: true })
+    .click();
+  await page.locator(".hostel-selected").waitFor();
+  await page.getByRole("button", { name: "Toggle menu" }).click();
+  await page
+    .getByRole("button", { name: "Find a snack", exact: false })
+    .click();
+  await page
+    .getByRole("heading", { name: "Patel Bhawan", exact: true, level: 1 })
+    .waitFor();
+  assert.equal(await page.locator(".sidebar.mobile-open").count(), 0);
+  await page.getByRole("button", { name: "Toggle menu" }).click();
+  await page.locator(".sidebar-bottom>button").click();
+  dialog = page.getByRole("dialog");
+  assert(
+    await dialog.evaluate((e) =>
+      e.classList.contains("support-theme-stashbox"),
+    ),
+  );
+  assert(await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth + 1));
+  await dialog.screenshot({ path: "outputs/support-stashbox-mobile.png" });
+  assert.equal(errors.length, 0, errors.join("\n"));
+  console.log(
+    "PASS contextual support themes, readable type, WhatsApp logo, neutral Mandakini, remembered/accessible hostel highlight, chooser reload/focus and mobile layout",
+  );
+} catch (e) {
+  console.log(
+    "UI failure state",
+    await page.evaluate(() => ({
+      url: location.href,
+      stored: localStorage.getItem("stashbox.hostel"),
+      cards: [...document.querySelectorAll(".hostel-card")].map((e) => ({
+        text: e.textContent,
+        selected: e.getAttribute("aria-pressed"),
+      })),
+    })),
+  );
+  await page.screenshot({
+    path: "outputs/support-selection-failure.png",
+    fullPage: true,
+  });
+  throw e;
+} finally {
+  await browser.close();
+}

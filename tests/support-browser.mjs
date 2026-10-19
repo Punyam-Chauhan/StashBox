@@ -1,11 +1,80 @@
-import {createRequire} from 'node:module';import {fileURLToPath} from 'node:url';import assert from 'node:assert/strict';
-const require=createRequire('C:/Users/Punyam/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/'),{chromium}=require('playwright');
-const browser=await chromium.launch({headless:true,executablePath:fileURLToPath(new URL('../.sites-runtime/browsers/chromium-1234/chrome-win64/chrome.exe',import.meta.url))});
-const page=await browser.newPage({viewport:{width:1600,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
-try{
-await page.goto('http://127.0.0.1:5173/');await page.locator('.hostel-card').first().waitFor();
-assert.equal(await page.locator('.hostel-grid').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length),4);assert((await page.locator('.hostel-card').first().boundingBox()).height<280);await page.locator('.hostel-choices').screenshot({path:'outputs/compact-hostel-choices.png'});
-await page.locator('.sidebar-bottom>button').click();let dialog=page.getByRole('dialog');assert((await dialog.innerText()).includes('Your friendly'));const link=dialog.getByRole('link',{name:'Report a bug? WhatsApp Punyam'});assert((await link.getAttribute('href')).startsWith('https://wa.me/919368930104?text='));assert.equal(await dialog.locator('.support-web').count(),2);await dialog.screenshot({path:'outputs/neighbourhood-support-desktop.png'});await dialog.getByRole('button',{name:'Close dialog'}).click();
-for(const width of [1024,390,320]){await page.setViewportSize({width,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));if(width<721)await page.getByRole('button',{name:'Toggle menu'}).click();await page.locator('.sidebar-bottom>button').click();dialog=page.getByRole('dialog');assert(await dialog.evaluate(e=>e.scrollWidth<=e.clientWidth+1),'Dialog fits '+width);assert(await dialog.locator('.modal-body').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'Body fits '+width);if(width===390)await dialog.screenshot({path:'outputs/neighbourhood-support-mobile.png'});await dialog.getByRole('button',{name:'Close dialog'}).click();if(width<721)await page.getByRole('button',{name:'Toggle menu'}).click();}
-assert.equal(errors.length,0,errors.join('\n'));console.log('PASS compact four-column hostel cards and comic support dialog: verified WhatsApp destination, vector artwork, desktop/tablet/390px/320px fit');
-}finally{await browser.close();}
+import { chromium, browserExecutable } from "./helpers/browser.mjs";
+
+import assert from "node:assert/strict";
+
+const browser = await chromium.launch({
+  headless: true,
+  executablePath: browserExecutable,
+});
+const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } }),
+  errors = [];
+page.on("pageerror", (e) => errors.push(e.message));
+try {
+  await page.goto("http://127.0.0.1:5173/");
+  await page.locator(".hostel-card").first().waitFor();
+  assert.equal(
+    await page
+      .locator(".hostel-grid")
+      .evaluate(
+        (e) => getComputedStyle(e).gridTemplateColumns.split(" ").length,
+      ),
+    4,
+  );
+  assert(
+    (await page.locator(".hostel-card").first().boundingBox()).height < 280,
+  );
+  await page
+    .locator(".hostel-choices")
+    .screenshot({ path: "outputs/compact-hostel-choices.png" });
+  await page.locator(".sidebar-bottom>button").click();
+  let dialog = page.getByRole("dialog");
+  assert((await dialog.innerText()).includes("Your friendly"));
+  const link = dialog.getByRole("link", {
+    name: "Report a bug? WhatsApp Punyam",
+  });
+  assert(
+    (await link.getAttribute("href")).startsWith(
+      "https://wa.me/919368930104?text=",
+    ),
+  );
+  assert.equal(await dialog.locator(".support-web").count(), 2);
+  await dialog.screenshot({
+    path: "outputs/neighbourhood-support-desktop.png",
+  });
+  await dialog.getByRole("button", { name: "Close dialog" }).click();
+  for (const width of [1024, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    );
+    if (width < 721)
+      await page.getByRole("button", { name: "Toggle menu" }).click();
+    await page.locator(".sidebar-bottom>button").click();
+    dialog = page.getByRole("dialog");
+    assert(
+      await dialog.evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
+      "Dialog fits " + width,
+    );
+    assert(
+      await dialog
+        .locator(".modal-body")
+        .evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
+      "Body fits " + width,
+    );
+    if (width === 390)
+      await dialog.screenshot({
+        path: "outputs/neighbourhood-support-mobile.png",
+      });
+    await dialog.getByRole("button", { name: "Close dialog" }).click();
+    if (width < 721)
+      await page.getByRole("button", { name: "Toggle menu" }).click();
+  }
+  assert.equal(errors.length, 0, errors.join("\n"));
+  console.log(
+    "PASS compact four-column hostel cards and comic support dialog: verified WhatsApp destination, vector artwork, desktop/tablet/390px/320px fit",
+  );
+} finally {
+  await browser.close();
+}

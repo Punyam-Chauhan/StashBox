@@ -1,47 +1,221 @@
-import assert from 'node:assert/strict';
-import {readFileSync,existsSync} from 'node:fs';
-import ts from 'typescript';
-import {Miniflare} from 'miniflare';
-const transpile=s=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
-const libraryCode=transpile(readFileSync('app/packet-library.ts','utf8')).replace('import entries from "./packet-library.json";',`const entries=${readFileSync('app/packet-library.json','utf8')};`);
-const libraryURL=`data:text/javascript;base64,${Buffer.from(libraryCode).toString('base64')}`;
-const storageCode=transpile(readFileSync("app/server/image-storage.ts","utf8"));
-const source=transpile(readFileSync('app/server/packet-photos.ts','utf8')).replace('"../packet-library"',JSON.stringify(libraryURL)).replace('"./image-storage"',JSON.stringify('data:text/javascript;base64,'+Buffer.from(storageCode).toString('base64')));
-const {photoService,productKey,imageType,MAX_PHOTO_BYTES}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
-const mf=new Miniflare({modules:true,script:'export default {fetch(){return new Response("test")}}',d1Databases:['DB'],r2Buckets:['BUCKET'],compatibilityDate:'2026-05-15'});
-let checks=0;const check=(v,label)=>{assert(v,label);checks++;console.log('PASS '+label);};
-try{
- const db=await mf.getD1Database('DB'),bucket=await mf.getR2Bucket('BUCKET');
- for(const sql of readFileSync('drizzle/0002_lowly_warlock.sql','utf8').split('--> statement-breakpoint').filter(s=>s.includes('CREATE TABLE')))await db.prepare(sql.trim()).run();
- for(const sql of readFileSync('drizzle/0003_majestic_sentry.sql','utf8').split('--> statement-breakpoint'))await db.prepare(sql.trim()).run();
- for(const sql of readFileSync('drizzle/0004_black_proudstar.sql','utf8').split('--> statement-breakpoint').filter(s=>s.includes('CREATE TABLE')))await db.prepare(sql.trim()).run();
- await db.prepare("CREATE TABLE listings (name TEXT,category TEXT,moderation_status TEXT DEFAULT 'approved')").run();
- await db.prepare('CREATE TABLE audit (id TEXT PRIMARY KEY,actor TEXT,target TEXT,action TEXT,created_at INTEGER)').run();
- await db.prepare("ALTER TABLE packet_photos ADD review_status TEXT NOT NULL DEFAULT 'approved'").run();
- await db.prepare("ALTER TABLE product_catalog ADD moderation_status TEXT NOT NULL DEFAULT 'approved'").run();
- await db.prepare('CREATE TABLE image_storage (id TEXT PRIMARY KEY,object_key TEXT,byte_size INTEGER,created_at INTEGER)').run();
- await db.prepare('CREATE TABLE market_media (id TEXT,kind TEXT,created_at INTEGER)').run();await db.prepare('CREATE TABLE pawn_listings (photo_id TEXT)').run();await db.prepare('CREATE TABLE users (upi_qr_id TEXT)').run();
- const bytes=new Uint8Array(readFileSync(new URL('./fixtures/test-pixel.webp',import.meta.url)));
- const service=photoService(db,bucket);
- const info={source:'seller',sourceUrl:null,credit:'Shared seller photo',license:null,name:'QA Unique Packet',category:'Sweet tooth',owner:'a'};
- const first=await service.store(bytes,info);await assert.rejects(service.store(bytes,{...info,owner:'b'}),/shared image/);checks++;console.log('PASS Second seller cannot replace a shared image');const second=await service.store(bytes,{...info,source:'maintainer',owner:'admin'});
- check((await service.choices(info.name,info.category)).photos.length===2,'Maintainer can add universal photo alternatives');
- check(await service.allowed(first.photo_id,'b',info.name,info.category)===first.photo_id,'Another seller can reuse a photo of the same product');
- await assert.rejects(service.allowed(first.photo_id,'b','Different flavour','Sweet tooth'));checks++;console.log('PASS Another flavour cannot reuse the wrong packet image');
- check((await service.choices(info.name,info.category)).defaultPhoto.photo_id===first.photo_id,'First upload is the initial default for an unknown product');
- await service.selectDefault(info.name,info.category,second.photo_id,'maintainer');
- const decorated=await service.decorate([{name:info.name,category:info.category,mrp:1000,price:1500,hostel:'tagore'},{name:info.name,category:info.category,mrp:2000,price:2500,hostel:'mandakini'}]);
- check(decorated.every(p=>p.photo_id===second.photo_id),'Maintainer default applies across hostels and printed MRPs');
- check(decorated[0].price===1500&&decorated[1].price===2500,'Photo changes preserve selling prices');
- check((await db.prepare('SELECT COUNT(*) AS n FROM audit').first()).n===1,'Default changes recorded in maintainer audit history');
- check(await productKey(info.name,info.category,1000)!==await productKey(info.name,info.category,2000),'Different MRPs stay separate comparison products');
- const cached=JSON.parse(readFileSync('app/packet-library.json')).filter(p=>p.image);
- check(cached.length>0&&cached.every(p=>existsSync('public'+p.image)),'Prepared image entries refer to real cached files');
- check(cached.length===66&&cached.every(p=>p.source==='provided'&&p.original_file),'All 66 maintainer-supplied photos have explicit provenance');
- const ready=await service.choices(cached[0].name,cached[0].category);
- check(ready.defaultPhoto.photo_path===cached[0].image,'Prepared product photo works without external lookup');
- await service.register(cached[0].name,cached[0].category);await db.prepare("UPDATE product_catalog SET moderation_status='removed' WHERE product_group=?").bind(ready.productGroup).run();check(!(await service.directory()).some(p=>p.name===cached[0].name),'Removed prepared products disappear from autocomplete');check((await service.directory(true)).some(p=>p.name===cached[0].name),'Moderator can still find removed prepared products');
- await assert.rejects(service.store(new Uint8Array(MAX_PHOTO_BYTES+1),info));checks++;console.log('PASS Oversized images rejected');
- check(imageType(new TextEncoder().encode('<svg onload="alert(1)"></svg>'))===null,'Active SVG uploads rejected');
- console.log(`${checks} shared product photo checks passed.`);
-}finally{await mf.dispose();}
+import assert from "node:assert/strict";
+import { readFileSync, existsSync } from "node:fs";
+import ts from "typescript";
+import { Miniflare } from "miniflare";
+const transpile = (s) =>
+  ts.transpileModule(s, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ES2022,
+    },
+  }).outputText;
+const libraryCode = transpile(
+  readFileSync("src/domain/packet-library.ts", "utf8"),
+).replace(
+  'import entries from "./packet-library.json";',
+  `const entries=${readFileSync("src/domain/packet-library.json", "utf8")};`,
+);
+const libraryURL = `data:text/javascript;base64,${Buffer.from(libraryCode).toString("base64")}`;
+const storageCode = transpile(
+  readFileSync("src/server/image-storage.ts", "utf8"),
+);
+const source = transpile(readFileSync("src/server/packet-photos.ts", "utf8"))
+  .replace('"../domain/packet-library"', JSON.stringify(libraryURL))
+  .replace(
+    '"./image-storage"',
+    JSON.stringify(
+      "data:text/javascript;base64," +
+        Buffer.from(storageCode).toString("base64"),
+    ),
+  );
+const { photoService, productKey, imageType, MAX_PHOTO_BYTES } = await import(
+  `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
+);
+const mf = new Miniflare({
+  modules: true,
+  script: 'export default {fetch(){return new Response("test")}}',
+  d1Databases: ["DB"],
+  r2Buckets: ["BUCKET"],
+  compatibilityDate: "2026-05-15",
+});
+let checks = 0;
+const check = (v, label) => {
+  assert(v, label);
+  checks++;
+  console.log("PASS " + label);
+};
+try {
+  const db = await mf.getD1Database("DB"),
+    bucket = await mf.getR2Bucket("BUCKET");
+  for (const sql of readFileSync("drizzle/0002_lowly_warlock.sql", "utf8")
+    .split("--> statement-breakpoint")
+    .filter((s) => s.includes("CREATE TABLE")))
+    await db.prepare(sql.trim()).run();
+  for (const sql of readFileSync(
+    "drizzle/0003_majestic_sentry.sql",
+    "utf8",
+  ).split("--> statement-breakpoint"))
+    await db.prepare(sql.trim()).run();
+  for (const sql of readFileSync("drizzle/0004_black_proudstar.sql", "utf8")
+    .split("--> statement-breakpoint")
+    .filter((s) => s.includes("CREATE TABLE")))
+    await db.prepare(sql.trim()).run();
+  await db
+    .prepare(
+      "CREATE TABLE listings (name TEXT,category TEXT,moderation_status TEXT DEFAULT 'approved')",
+    )
+    .run();
+  await db
+    .prepare(
+      "CREATE TABLE audit (id TEXT PRIMARY KEY,actor TEXT,target TEXT,action TEXT,created_at INTEGER)",
+    )
+    .run();
+  await db
+    .prepare(
+      "ALTER TABLE packet_photos ADD review_status TEXT NOT NULL DEFAULT 'approved'",
+    )
+    .run();
+  await db
+    .prepare(
+      "ALTER TABLE product_catalog ADD moderation_status TEXT NOT NULL DEFAULT 'approved'",
+    )
+    .run();
+  await db
+    .prepare(
+      "CREATE TABLE image_storage (id TEXT PRIMARY KEY,object_key TEXT,byte_size INTEGER,created_at INTEGER)",
+    )
+    .run();
+  await db
+    .prepare("CREATE TABLE market_media (id TEXT,kind TEXT,created_at INTEGER)")
+    .run();
+  await db.prepare("CREATE TABLE pawn_listings (photo_id TEXT)").run();
+  await db.prepare("CREATE TABLE users (upi_qr_id TEXT)").run();
+  const bytes = new Uint8Array(
+    readFileSync(new URL("./fixtures/test-pixel.webp", import.meta.url)),
+  );
+  const service = photoService(db, bucket);
+  const info = {
+    source: "seller",
+    sourceUrl: null,
+    credit: "Shared seller photo",
+    license: null,
+    name: "QA Unique Packet",
+    category: "Sweet tooth",
+    owner: "a",
+  };
+  const first = await service.store(bytes, info);
+  await assert.rejects(
+    service.store(bytes, { ...info, owner: "b" }),
+    /shared image/,
+  );
+  checks++;
+  console.log("PASS Second seller cannot replace a shared image");
+  const second = await service.store(bytes, {
+    ...info,
+    source: "maintainer",
+    owner: "admin",
+  });
+  check(
+    (await service.choices(info.name, info.category)).photos.length === 2,
+    "Maintainer can add universal photo alternatives",
+  );
+  check(
+    (await service.allowed(first.photo_id, "b", info.name, info.category)) ===
+      first.photo_id,
+    "Another seller can reuse a photo of the same product",
+  );
+  await assert.rejects(
+    service.allowed(first.photo_id, "b", "Different flavour", "Sweet tooth"),
+  );
+  checks++;
+  console.log("PASS Another flavour cannot reuse the wrong packet image");
+  check(
+    (await service.choices(info.name, info.category)).defaultPhoto.photo_id ===
+      first.photo_id,
+    "First upload is the initial default for an unknown product",
+  );
+  await service.selectDefault(
+    info.name,
+    info.category,
+    second.photo_id,
+    "maintainer",
+  );
+  const decorated = await service.decorate([
+    {
+      name: info.name,
+      category: info.category,
+      mrp: 1000,
+      price: 1500,
+      hostel: "tagore",
+    },
+    {
+      name: info.name,
+      category: info.category,
+      mrp: 2000,
+      price: 2500,
+      hostel: "mandakini",
+    },
+  ]);
+  check(
+    decorated.every((p) => p.photo_id === second.photo_id),
+    "Maintainer default applies across hostels and printed MRPs",
+  );
+  check(
+    decorated[0].price === 1500 && decorated[1].price === 2500,
+    "Photo changes preserve selling prices",
+  );
+  check(
+    (await db.prepare("SELECT COUNT(*) AS n FROM audit").first()).n === 1,
+    "Default changes recorded in maintainer audit history",
+  );
+  check(
+    (await productKey(info.name, info.category, 1000)) !==
+      (await productKey(info.name, info.category, 2000)),
+    "Different MRPs stay separate comparison products",
+  );
+  const cached = JSON.parse(
+    readFileSync("src/domain/packet-library.json"),
+  ).filter((p) => p.image);
+  check(
+    cached.length > 0 && cached.every((p) => existsSync("public" + p.image)),
+    "Prepared image entries refer to real cached files",
+  );
+  check(
+    cached.length === 66 &&
+      cached.every((p) => p.source === "provided" && p.original_file),
+    "All 66 maintainer-supplied photos have explicit provenance",
+  );
+  const ready = await service.choices(cached[0].name, cached[0].category);
+  check(
+    ready.defaultPhoto.photo_path === cached[0].image,
+    "Prepared product photo works without external lookup",
+  );
+  await service.register(cached[0].name, cached[0].category);
+  await db
+    .prepare(
+      "UPDATE product_catalog SET moderation_status='removed' WHERE product_group=?",
+    )
+    .bind(ready.productGroup)
+    .run();
+  check(
+    !(await service.directory()).some((p) => p.name === cached[0].name),
+    "Removed prepared products disappear from autocomplete",
+  );
+  check(
+    (await service.directory(true)).some((p) => p.name === cached[0].name),
+    "Moderator can still find removed prepared products",
+  );
+  await assert.rejects(
+    service.store(new Uint8Array(MAX_PHOTO_BYTES + 1), info),
+  );
+  checks++;
+  console.log("PASS Oversized images rejected");
+  check(
+    imageType(new TextEncoder().encode('<svg onload="alert(1)"></svg>')) ===
+      null,
+    "Active SVG uploads rejected",
+  );
+  console.log(`${checks} shared product photo checks passed.`);
+} finally {
+  await mf.dispose();
+}

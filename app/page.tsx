@@ -1,1 +1,1 @@
-export { default } from "./stashbox";
+export { default } from "../src/shell/app-shell";

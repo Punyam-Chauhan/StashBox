@@ -1,14 +1,77 @@
-import assert from 'node:assert/strict';import fs from 'node:fs';import ts from 'typescript';
-const code=ts.transpileModule(fs.readFileSync('app/bookkeeping.ts','utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
-const {calculateBook,demandSuggestions}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
-let n=0;const row=(kind,quantity,price,date)=>({id:String(++n),product_key:'oreo',name:'Oreo',kind,quantity,unit_price:price,entry_date:date,created_at:n,notes:''});
-const entries=[row('purchase',10,800,'2026-10-01'),row('purchase',10,1000,'2026-10-02'),row('sale',4,1500,'2026-10-07'),row('sale',8,1500,'2026-10-15'),row('sale',2,1600,'2026-10-17'),row('sale',4,1600,'2026-10-19')];
-const book=calculateBook(entries.reverse()),p=book.products[0];
-assert.equal(p.stock,2);assert.equal(p.value,2000);assert.equal(p.revenue,27600);assert.equal(p.profit,11600);assert.equal(book.rows.find(r=>r.quantity===8).cost,6800);
-assert.throws(()=>calculateBook([row('sale',1,1500,'2026-10-01')]));
-assert.throws(()=>calculateBook([...entries,row('sale',3,1500,'2026-10-19')]));
-assert.throws(()=>calculateBook(entries.filter(r=>r.kind!=='purchase'||r.unit_price!==800)));
-const d=demandSuggestions(book,'2026-10-19',3)[0];assert.equal(d.recentUnits,14);assert.equal(d.previousUnits,4);assert.equal(d.suggested,4);assert.equal(d.daysLeft,1);assert.equal(d.early,false);
-assert.equal(demandSuggestions(calculateBook([row('purchase',3,100,'2026-10-19')]),'2026-10-19').length,0);
-assert.equal(demandSuggestions(calculateBook([row('purchase',4,100,'2026-10-19'),row('sale',1,200,'2026-10-19')]),'2026-10-19')[0].early,true);
-console.log('PASS FIFO cost/profit, chronological ordering, overselling/backdating protection, restock quantities, week comparison and sparse-data labels');
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import ts from "typescript";
+const code = ts.transpileModule(
+  fs.readFileSync("src/domain/bookkeeping.ts", "utf8"),
+  {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+    },
+  },
+).outputText;
+const { calculateBook, demandSuggestions } = await import(
+  "data:text/javascript;base64," + Buffer.from(code).toString("base64")
+);
+let n = 0;
+const row = (kind, quantity, price, date) => ({
+  id: String(++n),
+  product_key: "oreo",
+  name: "Oreo",
+  kind,
+  quantity,
+  unit_price: price,
+  entry_date: date,
+  created_at: n,
+  notes: "",
+});
+const entries = [
+  row("purchase", 10, 800, "2026-10-01"),
+  row("purchase", 10, 1000, "2026-10-02"),
+  row("sale", 4, 1500, "2026-10-07"),
+  row("sale", 8, 1500, "2026-10-15"),
+  row("sale", 2, 1600, "2026-10-17"),
+  row("sale", 4, 1600, "2026-10-19"),
+];
+const book = calculateBook(entries.reverse()),
+  p = book.products[0];
+assert.equal(p.stock, 2);
+assert.equal(p.value, 2000);
+assert.equal(p.revenue, 27600);
+assert.equal(p.profit, 11600);
+assert.equal(book.rows.find((r) => r.quantity === 8).cost, 6800);
+assert.throws(() => calculateBook([row("sale", 1, 1500, "2026-10-01")]));
+assert.throws(() =>
+  calculateBook([...entries, row("sale", 3, 1500, "2026-10-19")]),
+);
+assert.throws(() =>
+  calculateBook(
+    entries.filter((r) => r.kind !== "purchase" || r.unit_price !== 800),
+  ),
+);
+const d = demandSuggestions(book, "2026-10-19", 3)[0];
+assert.equal(d.recentUnits, 14);
+assert.equal(d.previousUnits, 4);
+assert.equal(d.suggested, 4);
+assert.equal(d.daysLeft, 1);
+assert.equal(d.early, false);
+assert.equal(
+  demandSuggestions(
+    calculateBook([row("purchase", 3, 100, "2026-10-19")]),
+    "2026-10-19",
+  ).length,
+  0,
+);
+assert.equal(
+  demandSuggestions(
+    calculateBook([
+      row("purchase", 4, 100, "2026-10-19"),
+      row("sale", 1, 200, "2026-10-19"),
+    ]),
+    "2026-10-19",
+  )[0].early,
+  true,
+);
+console.log(
+  "PASS FIFO cost/profit, chronological ordering, overselling/backdating protection, restock quantities, week comparison and sparse-data labels",
+);

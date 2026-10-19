@@ -1,0 +1,38 @@
+export function PawnMark({
+  size = 24,
+  className = "",
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      className={`pawn-mark ${className}`}
+      width={size}
+      height={size}
+      viewBox="0 0 64 80"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="32" cy="14" r="10" fill="currentColor" />
+      <path
+        d="M27 25h10v7l7 5v4H20v-4l7-5v-7ZM25 43h14c-1 9 2 16 8 21H17c6-5 9-12 8-21ZM17 67h30l5 8H12l5-8Z"
+        fill="currentColor"
+      />
+      <path
+        d="M29 7a7 7 0 0 0-4 7m3 33c0 5-1 8-3 12"
+        stroke="#f7edd2"
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity=".45"
+      />
+      <path
+        d="m24 38 5-1m5 22 6-1m-19 13 8-1m8-41 2 1"
+        stroke="#253826"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        opacity=".4"
+      />
+    </svg>
+  );
+}
