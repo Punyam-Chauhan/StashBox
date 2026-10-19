@@ -65,3 +65,9 @@ Tests check the behaviors listed above; they do not establish that every possibl
 - The mobile drawer and its backdrop ease independently without blurring the entire page.
 - Buttons, filters and icons use brief colour/press feedback. No looping or layout-heavy animation is added.
 - Reduced-motion preference disables the added animation and delayed closing.
+
+## Drawer and mobile layout corrections
+
+- Mobile sidebars remain rendered off-screen; visibility changes after the closing transform finishes. This removes the legacy display:none interruption.
+- Payment setup has a component-owned padded body in both apps; file controls and QR previews fit narrow widths. Upload inputs reset after processing so the same file can be chosen again.
+- On phones, hero packet vectors sit faintly behind the title inside a bounded area. They add no extra row or height, and stay within the hero.
