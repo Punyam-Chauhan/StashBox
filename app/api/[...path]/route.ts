@@ -1,10 +1,11 @@
+import {hostelDirectory,registeredHostel} from "../../server/hostels";
 import {sellerDashboard} from "../../server/seller-dashboard";
 import {community} from "../../server/community";
 import {asciiText,checkContent,prohibitedReason} from "../../moderation";
 import {libraryPhoto} from "../../packet-library";
 import {validatePricing,currentPrice} from "../../pricing";
 import { env } from "cloudflare:workers";
-import { CATALOG, CATEGORIES, isHostel } from "../../shared";
+import { CATALOG, CATEGORIES } from "../../shared";
 import { photoService, productKey, photoColumns, photoJoins, MAX_PHOTO_BYTES, imageType } from "../../server/packet-photos";
 import {PACKET_LIBRARY,libraryProduct,normalizePacketName} from "../../packet-library";
 
@@ -32,10 +33,10 @@ function json(value:unknown,status=200,headers:Record<string,string>={}) {
   return Response.json(value,{status,headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff",...headers}});
 }
 function str(value:unknown,max=120) { return typeof value==="string" ? value.trim().slice(0,max) : ""; }
-function parseLocation(value:any) {
+async function parseLocation(value:any) {
   const room=String(value.room??"").trim(),wing=String(value.wing??"").trim(),hostel=value.hostel;
   const label=/^[A-Za-z0-9][A-Za-z0-9 .\/-]{0,23}$/;
-  if(!isHostel(hostel)||!label.test(room)||!label.test(wing))fail(400,"Choose your hostel and enter a room and wing (up to 24 letters, numbers, spaces, / or -).");
+  if(!await registeredHostel(db(),hostel)||!label.test(room)||!label.test(wing))fail(400,"Choose your hostel and enter a room and wing (up to 24 letters, numbers, spaces, / or -).");
   const phase=hostel==="mandakini"?String(value.phase??""):null;
   if(hostel==="mandakini"&&!["1","2","3"].includes(phase!))fail(400,"Choose Mandakini Phase 1, 2 or 3.");
   return {room,wing,hostel,phase};
@@ -93,7 +94,14 @@ async function handle(req:Request) {
     const origin=req.headers.get("origin");if(origin&&origin!==url.origin)fail(403,"Please use StashBox directly.");
     if(Number(req.headers.get("content-length")||0)>(path==="photos/upload"?MAX_PHOTO_BYTES:16000))fail(413,"Request is too large.");
   }
-  if(path.startsWith("seller/")){try{if(req.method!=="GET")await rate(req,"seller-dashboard",180);const result=await sellerDashboard(req,path,{db:db(),user:await currentUser(req,false),body:()=>body(req)});if(result)return result;}catch(e){fail(400,(e as Error).message);}}
+  if(path==="hostels"&&req.method==="GET")return json({hostels:await hostelDirectory(db())});
+  if(path==="admin/hostels"&&req.method==="POST"){
+    const actor=await admin(req);await rate(req,"hostel-create",20);const b=await body(req);let name;try{name=asciiText(b.name,"Bhawan name",70);checkContent(name);}catch(e){fail(400,(e as Error).message);}if(name!.length<2||!/[a-z]/i.test(name!))fail(400,"Enter a bhawan name.");
+    const list=await hostelDirectory(db()),id=name!.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');if(list.length>=100)fail(400,"The campus directory is full. Contact support.");if(list.some(h=>h.id===id||h.name.toLowerCase()===name!.toLowerCase()))fail(409,"That bhawan is already in your directory.");
+    const short=name!.replace(/ (Bhawan|Hostel)$/i,''),initials=short.split(/[^a-z0-9]+/i).filter(Boolean).slice(0,3).map(w=>w[0]).join('').toUpperCase();
+    try{await db().batch([db().prepare('INSERT INTO campus_hostels (id,name,short,initials,created_at) VALUES (?,?,?,?,?)').bind(id,name!,short,initials,Date.now()),db().prepare("INSERT INTO audit (id,actor,target,action,created_at) VALUES (?,?,?,'hostel_added',?)").bind(crypto.randomUUID(),actor.id,id,Date.now())]);}catch(e){if(String(e).includes('UNIQUE'))fail(409,"That bhawan is already in your directory.");throw e;}return json({ok:true,id});
+  }
+  if(path.startsWith("seller/")){try{if(req.method!=="GET")await rate(req,"seller-dashboard",180);const result=await sellerDashboard(req,path,{db:db(),user:await currentUser(req,false),body:()=>body(req)});if(result)return result;}catch(e){if(e instanceof ApiError)throw e;fail(400,(e as Error).message);}}
   if(path.startsWith("pawn")||path.startsWith("market/")||path==="payment-qr"||path==="admin/review"){try{const result=await community(req,path,{db:db(),bucket:env.BUCKET!,user:await currentUser(req,false),bytes:requestImages.get(req),body:()=>body(req),rate:()=>rate(req,"community-write",30)});if(result)return result;}catch(e){fail((e as any).status||400,(e as Error).message);}}
   if(path==="photos/library"&&req.method==="GET") {
     const name=str(url.searchParams.get("name"),70),category=str(url.searchParams.get("category"),40);
@@ -134,7 +142,7 @@ async function handle(req:Request) {
   }
   if(path==="listings"&&req.method==="GET") {
     const hostel=url.searchParams.get("hostel");
-    if(!isHostel(hostel))fail(400,"Choose a hostel to see its listings.");
+    if(!await registeredHostel(db(),hostel))fail(400,"Choose a hostel to see its listings.");
     const rows=await db().prepare(`SELECT l.id,l.product_key,l.name,l.size,l.container,l.volume_ml,l.mrp,l.moderation_status,l.category,l.price,l.price_after,l.price_until,l.usual_price,l.offer_text,l.available,l.seller_id,${photoColumns},
       u.name AS seller_name,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,
       CASE WHEN u.show_phone=1 THEN u.phone ELSE NULL END AS phone,u.is_open,u.confirmed_at,CASE WHEN qr.status='approved' THEN u.upi_qr_id ELSE NULL END AS upi_qr_id
@@ -146,7 +154,7 @@ async function handle(req:Request) {
   if(path==="signup"&&req.method==="POST") {
     await rate(req,"signup",8,15*60000);
     const b=await body(req), name=str(b.name,60),email=str(b.email,120).toLowerCase(),studentId=str(b.studentId,40).toLowerCase(),phone=str(b.phone,20).replace(/[\s()-]/g,"");
-    const location=parseLocation(b),password=validatePassword(b.password);
+    const location=await parseLocation(b),password=validatePassword(b.password);
     try{asciiText(b.name,"Name",60);asciiText(b.email,"Email",120);checkContent(name);}catch(e){fail(400,(e as Error).message);}
     if(name.length<2||!/^\S+@\S+\.\S+$/.test(email)||!/^[-a-z0-9_/.]{3,40}$/.test(studentId)||!/^\+?\d{10,15}$/.test(phone))fail(400,"Check your name, email, student ID and phone number.");
     const existing=await db().prepare("SELECT id FROM users WHERE email=? OR student_id=?").bind(email,studentId).first();
@@ -187,7 +195,7 @@ async function handle(req:Request) {
   if(path==="profile"&&req.method==="PUT") {
     const user=await seller(req),b=await body(req);
     const name=str(b.name,60),phone=str(b.phone,20).replace(/[\s()-]/g,"");
-    const location=parseLocation(b);
+    const location=await parseLocation(b);
     try{asciiText(b.name,"Name",60);checkContent(name);}catch(e){fail(400,(e as Error).message);}
     if(name.length<2||!/^\+?\d{10,15}$/.test(phone))fail(400,"Check your name and phone.");
     await db().prepare("UPDATE users SET name=?,phone=?,room_label=?,hostel=?,wing=?,phase=?,show_phone=?,is_open=?,shop_sleeping=? WHERE id=?").bind(name,phone,location.room,location.hostel,location.wing,location.phase,b.showPhone?1:0,b.isOpen?1:0,b.isOpen?0:1,user.id).run();
@@ -204,7 +212,7 @@ async function handle(req:Request) {
   }
   if(path==="mine"&&req.method==="POST") {
     const user=await seller(req);await rate(req,"add-listing",50);
-    if(!isHostel(user.hostel)||!user.wing||(user.hostel==="mandakini"&&!["1","2","3"].includes(user.phase)))fail(400,"Set your hostel, wing and phase in your profile before listing a snack.");
+    if(!await registeredHostel(db(),user.hostel)||!user.wing||(user.hostel==="mandakini"&&!["1","2","3"].includes(user.phase)))fail(400,"Set your hostel, wing and phase in your profile before listing a snack.");
     const b=await body(req),product=CATALOG.find(p=>p.key===b.productKey);
     const entered=product?.name||str(b.name,70),known=libraryProduct(entered)||(await photos().directory()).find(p=>normalizePacketName(p.name)===normalizePacketName(entered));
     const name=known?.name||entered,category=known?.category||product?.category||str(b.category,40),price=Number(b.price),mrp=validMrp(b.mrp);

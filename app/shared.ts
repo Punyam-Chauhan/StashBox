@@ -1,6 +1,7 @@
 import type {Pricing} from "./pricing";
 import preparedPackets from "./packet-library.json";
-export const HOSTELS = [
+export type Hostel={id:string;name:string;short:string;initials:string};
+export const HOSTELS:Hostel[] = [
   {id:"general-bipin-rawat",name:"General Bipin Rawat Bhawan",short:"General Bipin Rawat",initials:"BR"},
   {id:"tagore",name:"Tagore Bhawan",short:"Tagore",initials:"TB"},
   {id:"patel",name:"Patel Bhawan",short:"Patel",initials:"PB"},
@@ -9,7 +10,9 @@ export const HOSTELS = [
   {id:"saraswati",name:"Saraswati Bhawan",short:"Saraswati",initials:"SB"},
   {id:"mandakini",name:"Mandakini Bhawan",short:"Mandakini",initials:"MB"},
   {id:"sarojini",name:"Sarojini Bhawan",short:"Sarojini",initials:"SN"},
-] as const;
+];
+export const DEFAULT_HOSTELS=[...HOSTELS];
+export function setHostels(rows:Hostel[]){HOSTELS.splice(0,HOSTELS.length,...rows);}
 export const isHostel = (id:unknown):id is string => typeof id==="string"&&HOSTELS.some(h=>h.id===id);
 export const hostelName = (id:string|null|undefined) => HOSTELS.find(h=>h.id===id)?.name||"Choose a hostel";
 export const PHASE_NOTICE = "Phase 3 is separated from Phases 1–2. Rooms across this divide may be unreachable after 10 PM. Check access with the seller before heading over.";

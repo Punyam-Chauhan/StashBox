@@ -88,3 +88,5 @@ export const pawnListings=sqliteTable("pawn_listings",{
  status:text("status").notNull().default("pending"),available:integer("available").notNull().default(1),
  createdAt:integer("created_at").notNull(),updatedAt:integer("updated_at").notNull(),
 },t=>[index("pawn_status_created").on(t.status,t.createdAt),index("pawn_seller").on(t.sellerId)]);
+
+export const campusHostels=sqliteTable("campus_hostels",{id:text("id").primaryKey(),name:text("name").notNull(),short:text("short").notNull(),initials:text("initials").notNull(),createdAt:integer("created_at").notNull()});

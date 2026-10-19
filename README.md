@@ -2,7 +2,7 @@
 
 ## Stasher dashboard and current UI
 
-The UI calls sellers **Stashers**. Internal `seller_id`, API routes and existing database names are retained to preserve compatibility. `app/ui-polish.css` contains shared wrapping, navigation and button rules; compact hostel cards use four columns on wide desktop, two on mobile. Copy does not assume a fixed number of hostels. The current hostel registry is still defined in `app/shared.ts`; adding hostels through the moderator panel is a separate extension.
+The UI calls sellers **Stashers**. Internal `seller_id`, API routes and existing database names are retained to preserve compatibility. `app/ui-polish.css` contains shared wrapping, navigation and button rules; compact hostel cards use four columns on wide desktop, two on mobile. Copy does not assume a fixed number of hostels. The original hostels are seeded in `app/shared.ts`. The moderator can add more through the campus hostels section; `campus_hostels` stores additions, and the chooser, signup, profile and server validation all use the updated registry. Migration 0009 adds this registry. `node tests/hostel-manager.mjs` checks the complete flow.
 
 `app/seller-dashboard.tsx` provides the private Stasher dashboard and the compact shop control beside the account button. Closing the shutter hides both snack and Pawn Shop listings on the server, while keeping saved stock. Reopening requires a stock check and renews snack stock for 24 hours. These controls use `app/server/seller-dashboard.ts`; migration 0008 adds the private ledger and shutter state without replacing existing data.
 

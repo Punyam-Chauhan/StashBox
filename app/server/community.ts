@@ -1,8 +1,8 @@
+import {registeredHostel} from "./hostels";
 import {reservePhoto,releasePhoto,pruneUnusedImages,deleteMarketMedia,MAX_STORAGE_BYTES,MAX_IMAGE_BYTES} from './image-storage';
 import {asciiText,checkContent,prohibitedReason} from '../moderation';
 import {imageType,MAX_PHOTO_BYTES,photoService} from './packet-photos';
 import {libraryPhoto} from '../packet-library';
-import {isHostel} from '../shared';
 type Context={db:D1Database;bucket:R2Bucket;user:any;bytes?:Uint8Array;body:()=>Promise<any>;rate:()=>Promise<void>};
 export async function community(req:Request,path:string,c:Context):Promise<Response|null>{
  const {db,bucket,user}=c,url=new URL(req.url),json=(v:any,status=200)=>Response.json(v,{status,headers:{'Cache-Control':'no-store'}});
@@ -39,7 +39,7 @@ export async function community(req:Request,path:string,c:Context):Promise<Respo
  }
  if(path==='pawn/mine'&&req.method==='GET'){requireSeller();return json({listings:(await db.prepare(`SELECT p.*,${location} FROM pawn_listings p JOIN users u ON u.id=p.seller_id LEFT JOIN market_media qr ON qr.id=u.upi_qr_id WHERE p.seller_id=? ORDER BY p.updated_at DESC`).bind(user.id).all()).results});}
  if(path==='pawn'&&req.method==='POST'){
-  requireSeller();await c.rate();if(!isHostel(user.hostel)||!user.wing)return json({error:'Set your hostel, room and wing in your profile first.'},400);
+  requireSeller();await c.rate();if(!await registeredHostel(db,user.hostel)||!user.wing)return json({error:'Set your hostel, room and wing in your profile first.'},400);
   const b=await c.body(),title=asciiText(b.title,'Title',80),description=asciiText(b.description,'Description',600);checkContent(title,description);
   if(title.length<3||!['New / sealed','Like new','Used - good','Needs repair'].includes(b.condition)||!Number.isInteger(b.price)||b.price<100||b.price>5000000)return json({error:'Check the title, condition and price (Rs 1 to Rs 50,000).'},400);
   const count=await db.prepare('SELECT COUNT(*) AS n FROM pawn_listings WHERE seller_id=?').bind(user.id).first<any>();if(count.n>=30)return json({error:'You can have up to 30 Pawn Shop listings.'},400);
