@@ -147,9 +147,9 @@ async function handle(req:Request) {
     if(!await registeredHostel(db(),hostel))fail(400,"Choose a hostel to see its listings.");
     const rows=await db().prepare(`SELECT l.id,l.product_key,l.name,l.size,l.container,l.volume_ml,l.mrp,l.moderation_status,l.category,l.price,l.price_after,l.price_until,l.usual_price,l.offer_text,l.available,l.seller_id,${photoColumns},
       u.name AS seller_name,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,
-      CASE WHEN u.show_phone=1 THEN u.phone ELSE NULL END AS phone,u.is_open,u.confirmed_at,CASE WHEN qr.status='approved' THEN u.upi_qr_id ELSE NULL END AS upi_qr_id
+      CASE WHEN u.show_phone=1 AND u.is_open=1 AND u.shop_sleeping=0 THEN u.phone ELSE NULL END AS phone,CASE WHEN u.shop_sleeping=0 AND u.is_open=1 THEN 1 ELSE 0 END AS is_open,u.confirmed_at,CASE WHEN qr.status='approved' AND u.is_open=1 AND u.shop_sleeping=0 THEN u.upi_qr_id ELSE NULL END AS upi_qr_id
       FROM listings l JOIN users u ON u.id=l.seller_id LEFT JOIN market_media qr ON qr.id=u.upi_qr_id ${photoJoins}
-      WHERE u.shop_sleeping=0 AND l.moderation_status='approved' AND l.available=1 AND u.confirmed_at>? AND u.hostel=? AND u.wing IS NOT NULL
+      WHERE u.shop_sleeping=0 AND u.is_open=1 AND l.moderation_status='approved' AND l.available=1 AND u.confirmed_at>? AND u.hostel=? AND u.wing IS NOT NULL
       AND (u.hostel!='mandakini' OR u.phase IN ('1','2','3')) ORDER BY l.price,l.id`).bind(Date.now()-DAY,hostel).all<any>();
     return json({hostel,listings:(await photos().decorate(rows.results.filter(r=>!prohibitedReason(r.name+" "+(r.offer_text||""))))).map(o=>({...o,effective_price:currentPrice(o)}))});
   }

@@ -42,7 +42,7 @@ try{
  await page.setViewportSize({width:390,height:844});
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mandakini directory fits mobile');
  await page.screenshot({path:'outputs/mandakini-mobile.png',fullPage:true});
- await page.getByLabel('Quick navigation',{exact:true}).click();await page.getByRole('navigation',{name:'Quick navigation links'}).getByRole('button',{name:'Choose hostel',exact:true}).click();
+ await page.getByRole('button',{name:'Toggle menu'}).click();await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Choose hostel',exact:true}).click();
  await page.getByRole('button',{name:/Tagore Bhawan/}).click();
  await page.getByRole('heading',{name:'Tagore Bhawan',exact:true}).waitFor();
  await page.locator('.product-card').first().waitFor();
@@ -51,7 +51,7 @@ try{
  await page.reload();await page.getByRole('heading',{name:'Tagore Bhawan',exact:true}).waitFor();
  assert(new URL(page.url()).searchParams.get('hostel')==='tagore','Selected hostel survives refresh');
  await page.getByRole('button',{name:'Show real listings'}).click();
- await page.getByRole('heading',{name:'Be your hostel’s first snack spot.'}).waitFor();
+ await page.getByRole('heading',{name:'No stashes open right now.'}).waitFor();
  await page.getByRole('button',{name:'List your first snack'}).click();
  const dialog=page.getByRole('dialog');
  await dialog.getByRole('textbox',{name:'Your name',exact:true}).fill('QA Browser Student');

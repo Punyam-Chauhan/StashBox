@@ -26,6 +26,7 @@ await api('pawn','POST',{title:'QA Study desk '+run,description:'Solid desk in g
 check((await api('listings?hostel=patel')).data.listings.some(i=>i.seller_id===a.data.user.id),'Open seller snacks visible');
 check((await api('seller/shutter','POST',{sleeping:true},a.cookie)).status===200,'Going to sleep closes the shop');
 check(!(await api('listings?hostel=patel')).data.listings.some(i=>i.seller_id===a.data.user.id),'Sleeping snacks hidden server side');
+check(!(await api('listings?hostel=patel&includeClosed=1')).data.listings.some(i=>i.seller_id===a.data.user.id),'Closed items cannot be revealed with a query flag');
 check((await api('pawn')).data.listings.some(i=>i.seller_id===a.data.user.id),'Snack shutter does not hide independent Pawn Shop listings');
 check((await api('mine','GET',undefined,a.cookie)).data.listings.length===1,'Sleeping keeps saved stock');
 check((await api('seller/shutter','POST',{sleeping:false},a.cookie)).status===400,'Reopening requires stock confirmation');

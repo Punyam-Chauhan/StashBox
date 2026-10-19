@@ -49,3 +49,12 @@ Tests check the behaviors listed above; they do not establish that every possibl
 - Stock review has one panel/action; shop opening/closing is controlled only from the header. Shutter menus and reopen dialogs are compact.
 - Only one divider remains before the bottom hero. Pawn Shop masthead keeps the shop name and listing action without promotional subtitles.
 - Checked with `tests/mobile-refinements.mjs` at 320, 360, 390 and 540 px, plus grouped cards, Stasher dashboard and hostel/support navigation regressions.
+
+## Browse/navigation refinements
+
+- Search spans its entire row; wing filtering sits below it. The Open now filter is removed. Closed and sleeping stashes stay completely hidden in both API responses and comparisons.
+- Closing a shop gives a status message confirming items are hidden until reopening.
+- The StashBox mobile quick menu has exactly four destinations; the Pawn menu has Shop floor, Deploy The Pawn and Back to StashBox. Other actions remain in their sidebars.
+- Both drawer brands, app switches, close controls and navigation sections use consistent spacing.
+- Pawn browsing restores its descriptive copy, motto and buy/sell seal below the shop name, preserving the dusky palette.
+- Interactions use short opacity/colour/transform transitions; reduced-motion preference disables added motion.
