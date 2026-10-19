@@ -22,11 +22,20 @@ export function photoService(db:D1Database,bucket:R2Bucket){
  async function store(bytes:Uint8Array,info:{source:string;sourceUrl:string|null;credit:string;license:string|null;name:string;owner:string|null;category?:string}){
   const type=imageType(bytes);if(type!=="image/webp"||bytes.byteLength>MAX_PHOTO_BYTES)throw new Error("Use a compressed WebP photo under 200 KB.");
   const id=crypto.randomUUID(),key=`packets/${id}`,category=info.category||"Sweet tooth",group=photoGroup(info.name,category);
+  if(info.source==='seller'&&libraryPhoto(info.name))throw Object.assign(new Error('This product already has a shared image. Only the maintainer can change it.'),{status:409});
   await pruneUnusedImages(db,bucket);await reservePhoto(db,id,key,bytes.byteLength);
-  try{await bucket.put(key,bytes,{httpMetadata:{contentType:type}});await db.prepare("INSERT INTO packet_photos (id,object_key,content_type,source,source_url,credit,license,matched_name,uploaded_by,created_at,product_group,category,review_status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(id,key,type,info.source,info.sourceUrl,info.credit,info.license,info.name,info.owner,Date.now(),group,category,'approved').run();}
+  try{
+   await bucket.put(key,bytes,{httpMetadata:{contentType:type}});
+   const guard=info.source==='seller'?" AND NOT EXISTS(SELECT 1 FROM product_photo_defaults WHERE product_group=?)":"";
+   const bindings:any[]=[id,key,type,info.source,info.sourceUrl,info.credit,info.license,info.name,info.owner,Date.now(),group,category,'approved'];if(info.source==='seller')bindings.push(group);
+   const insert=db.prepare(`INSERT INTO packet_photos (id,object_key,content_type,source,source_url,credit,license,matched_name,uploaded_by,created_at,product_group,category,review_status) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE 1=1${guard}`).bind(...bindings);
+   const statements=[insert];
+   if(!libraryPhoto(info.name))statements.push(db.prepare("INSERT OR IGNORE INTO product_photo_defaults (product_group,name,category,photo_id,selected_by,updated_at) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM packet_photos WHERE id=?)").bind(group,info.name,category,id,'first-upload',Date.now(),id));
+   const result=await db.batch(statements);
+   if(!result[0].meta.changes)throw Object.assign(new Error('This product already has a shared image. Only the maintainer can change it.'),{status:409});
+  }
   catch(e){await bucket.delete(key);await releasePhoto(db,id);throw e;}
   await register(info.name,category,'approved');
-  if(!libraryPhoto(info.name))await db.prepare("INSERT OR IGNORE INTO product_photo_defaults (product_group,name,category,photo_id,selected_by,updated_at) VALUES (?,?,?,?,?,?)").bind(group,info.name,category,id,"first-upload",Date.now()).run();
   return await photo(id,true);
  }
  async function choices(name:string,category:string,includePending=false){
@@ -42,6 +51,7 @@ export function photoService(db:D1Database,bucket:R2Bucket){
   if(id===null||id===undefined||id==="")return null;
   if(typeof id!=="string"||!await photo(id,true))throw new Error("Choose a shared packet photo or upload one.");
   if(name&&category){const group=photoGroup(name,category),prepared=libraryPhoto(name);const uploaded=await db.prepare("SELECT id FROM packet_photos WHERE id=? AND product_group=? AND (review_status='approved' OR uploaded_by=?)").bind(id,group,_userId).first();if(prepared?.photo_id!==id&&!uploaded)throw new Error("Choose a photo for this product and flavour.");}
+  if(name&&category){const selected=await choices(name,category);if(selected.defaultPhoto&&selected.defaultPhoto.photo_id!==id)throw new Error("Use this product's shared default image. Only the maintainer can change it.");}
   return id;
  }
  async function selectDefault(name:string,category:string,id:string,actor:string){

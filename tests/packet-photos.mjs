@@ -24,8 +24,8 @@ try{
  const bytes=new Uint8Array(readFileSync(new URL('./fixtures/test-pixel.webp',import.meta.url)));
  const service=photoService(db,bucket);
  const info={source:'seller',sourceUrl:null,credit:'Shared seller photo',license:null,name:'QA Unique Packet',category:'Sweet tooth',owner:'a'};
- const first=await service.store(bytes,info),second=await service.store(bytes,{...info,owner:'b'});
- check((await service.choices(info.name,info.category)).photos.length===2,'Uploads become universal reusable product options');
+ const first=await service.store(bytes,info);await assert.rejects(service.store(bytes,{...info,owner:'b'}),/shared image/);checks++;console.log('PASS Second seller cannot replace a shared image');const second=await service.store(bytes,{...info,source:'maintainer',owner:'admin'});
+ check((await service.choices(info.name,info.category)).photos.length===2,'Maintainer can add universal photo alternatives');
  check(await service.allowed(first.photo_id,'b',info.name,info.category)===first.photo_id,'Another seller can reuse a photo of the same product');
  await assert.rejects(service.allowed(first.photo_id,'b','Different flavour','Sweet tooth'));checks++;console.log('PASS Another flavour cannot reuse the wrong packet image');
  check((await service.choices(info.name,info.category)).defaultPhoto.photo_id===first.photo_id,'First upload is the initial default for an unknown product');

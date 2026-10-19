@@ -1,5 +1,21 @@
 # StashBox
 
+## Stasher dashboard and current UI
+
+The UI calls sellers **Stashers**. Internal `seller_id`, API routes and existing database names are retained to preserve compatibility. `app/ui-polish.css` contains shared wrapping, navigation and button rules; compact hostel cards use four columns on wide desktop, two on mobile. Copy does not assume a fixed number of hostels. The current hostel registry is still defined in `app/shared.ts`; adding hostels through the moderator panel is a separate extension.
+
+`app/seller-dashboard.tsx` provides the private Stasher dashboard and the compact shop control beside the account button. Closing the shutter hides both snack and Pawn Shop listings on the server, while keeping saved stock. Reopening requires a stock check and renews snack stock for 24 hours. These controls use `app/server/seller-dashboard.ts`; migration 0008 adds the private ledger and shutter state without replacing existing data.
+
+The private notebook supports dated purchases/opening stock and sales, corrections, deletion, a monthly calendar, best sellers, inventory cost, estimated gross profit and CSV export. `app/bookkeeping.ts` calculates FIFO cost using integer paise. Sales cannot exceed recorded stock, including after backdated edits or deleting a purchase. Optimistic database revisions prevent simultaneous requests from overselling. Every query is scoped to the signed-in account. Notebook entries do not automatically modify public availability.
+
+Restock suggestions compare the Stasher's last seven days of recorded sales with the previous seven and estimate remaining stock coverage. The planning window is selectable. Sparse history is labelled an early signal; products without sales receive no demand recommendation. These suggestions describe the Stasher's own history, not measured campus demand.
+
+Products with a shared photo hide the Stasher upload controls. The server also rejects alternate uploads, including concurrent attempts after a first upload establishes a default. The moderator retains shared-photo management. Alcohol/intoxicant aliases and live animal terms are blocked in both marketplaces, with allowances for clearly described computer mice, CAT study books and familiar packaged drinks. Public-facing copy gives community rules rather than implementation details.
+
+`app/support-panel.tsx` contains the original web and mask vectors for the neighbourhood moderator dialog. The WhatsApp button opens the moderator's supplied number with an editable greeting; it sends no message automatically. The hero illustrations remain unchanged.
+
+Checks: `node tests/bookkeeping.mjs`, `node tests/seller-dashboard.mjs`, `node tests/seller-browser.mjs`, `node tests/support-browser.mjs`, plus the existing integration, community, photo, pricing and grouped-card tests. The app remains local-only.
+
 A snack directory for General Bipin Rawat, Tagore, Patel, Silver Jubilee, Vishwesharya, Saraswati, Mandakini and Sarojini Bhawan. Built with React, Vinext, Cloudflare Workers and D1.
 
 ## Run locally

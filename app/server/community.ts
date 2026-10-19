@@ -1,5 +1,5 @@
 import {reservePhoto,releasePhoto,pruneUnusedImages,deleteMarketMedia,MAX_STORAGE_BYTES,MAX_IMAGE_BYTES} from './image-storage';
-import {asciiText,checkContent} from '../moderation';
+import {asciiText,checkContent,prohibitedReason} from '../moderation';
 import {imageType,MAX_PHOTO_BYTES,photoService} from './packet-photos';
 import {libraryPhoto} from '../packet-library';
 import {isHostel} from '../shared';
@@ -35,7 +35,7 @@ export async function community(req:Request,path:string,c:Context):Promise<Respo
  }
  if(path==='payment-qr'&&req.method==='DELETE'){requireSeller();await db.prepare('UPDATE users SET upi_qr_id=NULL WHERE id=?').bind(user.id).run();if(user.upi_qr_id)await deleteMarketMedia(db,bucket,user.upi_qr_id);return json({ok:true});}
  if(path==='pawn'&&req.method==='GET'){
-  const rows=await db.prepare(`SELECT p.*,${location} FROM pawn_listings p JOIN users u ON u.id=p.seller_id LEFT JOIN market_media qr ON qr.id=u.upi_qr_id WHERE p.status='approved' AND p.available=1 AND p.updated_at>? ORDER BY p.created_at DESC LIMIT 200`).bind(Date.now()-30*86400000).all();return json({listings:rows.results});
+  const rows=await db.prepare(`SELECT p.*,${location} FROM pawn_listings p JOIN users u ON u.id=p.seller_id LEFT JOIN market_media qr ON qr.id=u.upi_qr_id WHERE u.shop_sleeping=0 AND p.status='approved' AND p.available=1 AND p.updated_at>? ORDER BY p.created_at DESC LIMIT 200`).bind(Date.now()-30*86400000).all<any>();return json({listings:rows.results.filter(p=>!prohibitedReason(p.title+' '+p.description))});
  }
  if(path==='pawn/mine'&&req.method==='GET'){requireSeller();return json({listings:(await db.prepare(`SELECT p.*,${location} FROM pawn_listings p JOIN users u ON u.id=p.seller_id LEFT JOIN market_media qr ON qr.id=u.upi_qr_id WHERE p.seller_id=? ORDER BY p.updated_at DESC`).bind(user.id).all()).results});}
  if(path==='pawn'&&req.method==='POST'){

@@ -35,7 +35,7 @@ export const CATALOG: Product[] = [
 ];
 // Keep the three hero products in place; extend seller choices from the prepared library.
 CATALOG.push(...preparedPackets.filter(p=>!CATALOG.some(c=>c.key===p.key)).map(p=>({key:p.key,name:p.name,category:p.category,size:"",color:"#798665",short:"STASH"})));
-export type User = { upi_qr_id?:string|null; id:string; name:string; email:string; student_id:string; phone:string; room:string; hostel:string|null; wing:string|null; phase:string|null; show_phone:number; is_open:number; role:string; must_change_password:number; confirmed_at:number };
+export type User = { shop_sleeping?:number; upi_qr_id?:string|null; id:string; name:string; email:string; student_id:string; phone:string; room:string; hostel:string|null; wing:string|null; phase:string|null; show_phone:number; is_open:number; role:string; must_change_password:number; confirmed_at:number };
 export type DrinkVariant={moderation_status?:string;upi_qr_id?:string|null;container?:string|null;volume_ml?:number|null};
 export type Listing = Photo & DrinkVariant & Pricing & {mrp:number|null; id:string; product_key:string; name:string; size:string; category:string; price:number; available:number; seller_id:string; seller_name:string; room:string; hostel:string; wing:string; phase:string|null; phone:string|null; is_open:number; confirmed_at:number };
 export type Photo = {photo_id:string|null;photo_path?:string|null;photo_source?:string|null;photo_credit?:string|null;photo_license?:string|null;photo_source_url?:string|null;photo_name?:string|null};

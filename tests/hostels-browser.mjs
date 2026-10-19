@@ -33,7 +33,7 @@ try{
  await page.getByRole('dialog').waitFor();assert.equal(await page.locator('.offer').count(),3);
  assert.equal(await page.locator('.offer-group h4').count(),2,'Comparison separates connected phases from Phase 3');
  await page.getByRole('button',{name:'Close dialog'}).click();
- await page.getByRole('textbox',{name:'Search snacks, rooms or sellers'}).fill('oreo');
+ await page.getByRole('textbox',{name:'Search snacks, rooms or Stashers'}).fill('oreo');
  await page.waitForFunction(()=>document.querySelectorAll('.product-card').length===1);
  await page.getByRole('button',{name:'Clear search'}).click();
  await page.setViewportSize({width:1440,height:1100});

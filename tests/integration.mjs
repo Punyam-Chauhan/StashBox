@@ -32,8 +32,11 @@ try{
   check(variants.length===2&&new Set(variants.map(l=>l.product_key)).size===2,'Same snack with different MRPs has separate listings');
   const variant=variants.find(l=>l.mrp===2000);await call(`mine/${variant.id}`,'DELETE',undefined,a.cookie);
   const rawImage=new Uint8Array(readFileSync(new URL('./fixtures/test-pixel.webp',import.meta.url)));
+  const locked=await fetch(base+'/api/photos/upload?name=Oreo%20Original&category=Sweet%20tooth',{method:'POST',headers:{Cookie:a.cookie,'Content-Type':'image/webp','X-Photo-Rights':'confirmed'},body:rawImage});check(locked.status===409,'Sellers cannot upload alternatives for products with shared images');
+  sql(`UPDATE users SET role='admin' WHERE id='${a.user.id}'`);
   const upload=await fetch(base+'/api/photos/upload?name=Oreo%20Original&category=Sweet%20tooth',{method:'POST',headers:{Cookie:a.cookie,'Content-Type':'image/webp','X-Photo-Rights':'confirmed'},body:rawImage});
-  const uploaded=await upload.json();check(upload.status===200&&uploaded.photo.photo_source==='seller','Seller can upload a permitted packet photo');
+  const uploaded=await upload.json();check(upload.status===200&&uploaded.photo.photo_source==='maintainer','Maintainer can upload an alternate packet photo');
+  await call('admin/photos','PUT',{name:'Oreo Original',category:'Sweet tooth',photoId:uploaded.photo.photo_id},a.cookie);sql(`UPDATE users SET role='seller' WHERE id='${a.user.id}'`);
   const imageResponse=await fetch(base+'/api/photos/'+uploaded.photo.photo_id);check(imageResponse.status===200&&imageResponse.headers.get('content-type')==='image/webp'&&new Uint8Array(await imageResponse.arrayBuffer()).length===rawImage.length,'Cached image served through local server');
   check((await fetch(base+'/api/photos/upload',{method:'POST',headers:{Cookie:a.cookie,'Content-Type':'image/webp'},body:rawImage})).status===400,'Photo reuse permission required');
   check((await fetch(base+'/api/photos/upload',{method:'POST',headers:{'Content-Type':'image/webp','X-Photo-Rights':'confirmed'},body:rawImage})).status===401,'Anonymous uploads rejected');
@@ -48,7 +51,8 @@ try{
   check(ours.every(l=>l.phone===null&&!('email'in l)&&!('student_id'in l)),'Phone, email and student ID private by default');
   await call('profile','PUT',{name:a.user.name,phone:'9000000000',...home,showPhone:true,isOpen:false},a.cookie);
   const shown=(await call(feed)).data.listings.find(l=>l.seller_id===a.user.id);
-  check(shown.phone==='9000000000'&&shown.is_open===0&&shown.wing==='East 9'&&shown.phase==='1','Phone opt-in, closed status and entered wing/phase work');
+  check(!shown,'Closed shops are hidden on the server');
+  await call('profile','PUT',{name:a.user.name,phone:'9000000000',...home,showPhone:true,isOpen:true},a.cookie);const open=(await call(feed)).data.listings.find(l=>l.seller_id===a.user.id);check(open.phone==='9000000000'&&open.wing==='East 9'&&open.phase==='1','Phone opt-in and entered wing/phase work');
   check((await call('profile','PUT',{name:'Test',phone:'9000000000',...home,room:'../../',showPhone:false,isOpen:true},a.cookie)).status===400,'Invalid location labels rejected');
   check((await call(`mine/${item.id}`,'PUT',{price:-5,available:true},a.cookie)).status===400,'Invalid prices rejected');
   await call(`mine/${item.id}`,'PUT',{price:3500,available:false},a.cookie);

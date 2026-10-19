@@ -34,7 +34,7 @@ try{
  await dialog.screenshot({path:'outputs/grouped-product-options.png'});
  rows=rows.filter(r=>r.id!=='bottle');await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.waitForFunction(()=>document.querySelectorAll('.pack-variant').length===2);
  await page.getByRole('button',{name:'Close dialog'}).click();await page.locator('.toggle-label').click();assert((await coke.locator('.product-price').innerText()).includes('₹23'),'Starting price prefers an open seller when closed stock is included');
- await page.getByRole('textbox',{name:'Search snacks, rooms or sellers'}).fill('bottle');await page.waitForFunction(()=>document.querySelectorAll('.product-card').length===0);await page.getByRole('button',{name:'Clear search'}).click();
+ await page.getByRole('textbox',{name:'Search snacks, rooms or Stashers'}).fill('bottle');await page.waitForFunction(()=>document.querySelectorAll('.product-card').length===0);await page.getByRole('button',{name:'Clear search'}).click();
  await page.setViewportSize({width:1000,height:1000});assert.equal(await page.locator('.product-grid').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length),3,'Three columns on smaller desktop/tablet');
  await page.setViewportSize({width:390,height:844});assert.equal(await page.locator('.product-grid').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length),2,'Two columns on mobile');assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.locator('.directory').screenshot({path:'outputs/grouped-products-mobile.png'});
  await coke.click();await page.getByRole('dialog').screenshot({path:'outputs/grouped-options-mobile.png'});await page.getByRole('button',{name:'Close dialog'}).click();

@@ -1,3 +1,4 @@
+import {sellerDashboard} from "../../server/seller-dashboard";
 import {community} from "../../server/community";
 import {asciiText,checkContent,prohibitedReason} from "../../moderation";
 import {libraryPhoto} from "../../packet-library";
@@ -51,7 +52,7 @@ async function hashPassword(password:string,salt:string) {
   return Array.from(new Uint8Array(bits),b=>b.toString(16).padStart(2,"0")).join("");
 }
 function equal(a:string,b:string) { let diff=a.length^b.length; for(let i=0;i<Math.max(a.length,b.length);i++)diff|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0); return diff===0; }
-const safeColumns="u.upi_qr_id,u.id,u.name,u.email,u.student_id,u.phone,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,u.show_phone,u.is_open,u.role,u.must_change_password,u.confirmed_at";
+const safeColumns="u.shop_sleeping,u.upi_qr_id,u.id,u.name,u.email,u.student_id,u.phone,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,u.show_phone,u.is_open,u.role,u.must_change_password,u.confirmed_at";
 async function currentUser(req:Request,required=true) {
   const token=req.headers.get("cookie")?.match(/(?:^|;\s*)stash_session=([a-f0-9]{64})(?:;|$)/)?.[1];
   const user=token ? await db().prepare(`SELECT ${safeColumns} FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?`).bind(await digest(token),Date.now()).first<any>() : null;
@@ -92,6 +93,7 @@ async function handle(req:Request) {
     const origin=req.headers.get("origin");if(origin&&origin!==url.origin)fail(403,"Please use StashBox directly.");
     if(Number(req.headers.get("content-length")||0)>(path==="photos/upload"?MAX_PHOTO_BYTES:16000))fail(413,"Request is too large.");
   }
+  if(path.startsWith("seller/")){try{if(req.method!=="GET")await rate(req,"seller-dashboard",180);const result=await sellerDashboard(req,path,{db:db(),user:await currentUser(req,false),body:()=>body(req)});if(result)return result;}catch(e){fail(400,(e as Error).message);}}
   if(path.startsWith("pawn")||path.startsWith("market/")||path==="payment-qr"||path==="admin/review"){try{const result=await community(req,path,{db:db(),bucket:env.BUCKET!,user:await currentUser(req,false),bytes:requestImages.get(req),body:()=>body(req),rate:()=>rate(req,"community-write",30)});if(result)return result;}catch(e){fail((e as any).status||400,(e as Error).message);}}
   if(path==="photos/library"&&req.method==="GET") {
     const name=str(url.searchParams.get("name"),70),category=str(url.searchParams.get("category"),40);
@@ -108,7 +110,8 @@ async function handle(req:Request) {
     const name=str(url.searchParams.get("name"),70),category=str(url.searchParams.get("category"),40);
     try{if(!libraryProduct(name))asciiText(name,"Product name",70);checkContent(name);}catch(e){fail(400,(e as Error).message);}
     if(name.length<2||!CATEGORIES.slice(1).includes(category))fail(400,"Enter the product name and category before uploading.");
-    const photo=await photos().store(bytes,{source:user.role==="admin"?"maintainer":"seller",sourceUrl:null,credit:user.role==="admin"?"Maintainer photo":"Seller photo - shared with permission",license:null,name,category,owner:user.id});
+    if(user.role!=="admin"&&(await photos().choices(name,category)).defaultPhoto)fail(409,"This product already has a shared photo. Only the maintainer can change it.");
+    const photo=await photos().store(bytes,{source:user.role==="admin"?"maintainer":"seller",sourceUrl:null,credit:user.role==="admin"?"Maintainer photo":"Stasher photo - shared with permission",license:null,name,category,owner:user.id});
     return json({photo});
   }
   if(path==="photos/credits"&&req.method==="GET") {
@@ -136,7 +139,7 @@ async function handle(req:Request) {
       u.name AS seller_name,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,
       CASE WHEN u.show_phone=1 THEN u.phone ELSE NULL END AS phone,u.is_open,u.confirmed_at,CASE WHEN qr.status='approved' THEN u.upi_qr_id ELSE NULL END AS upi_qr_id
       FROM listings l JOIN users u ON u.id=l.seller_id LEFT JOIN market_media qr ON qr.id=u.upi_qr_id ${photoJoins}
-      WHERE l.moderation_status='approved' AND l.available=1 AND u.confirmed_at>? AND u.hostel=? AND u.wing IS NOT NULL
+      WHERE u.shop_sleeping=0 AND l.moderation_status='approved' AND l.available=1 AND u.confirmed_at>? AND u.hostel=? AND u.wing IS NOT NULL
       AND (u.hostel!='mandakini' OR u.phase IN ('1','2','3')) ORDER BY l.price,l.id`).bind(Date.now()-DAY,hostel).all<any>();
     return json({hostel,listings:(await photos().decorate(rows.results.filter(r=>!prohibitedReason(r.name+" "+(r.offer_text||""))))).map(o=>({...o,effective_price:currentPrice(o)}))});
   }
@@ -187,7 +190,7 @@ async function handle(req:Request) {
     const location=parseLocation(b);
     try{asciiText(b.name,"Name",60);checkContent(name);}catch(e){fail(400,(e as Error).message);}
     if(name.length<2||!/^\+?\d{10,15}$/.test(phone))fail(400,"Check your name and phone.");
-    await db().prepare("UPDATE users SET name=?,phone=?,room_label=?,hostel=?,wing=?,phase=?,show_phone=?,is_open=? WHERE id=?").bind(name,phone,location.room,location.hostel,location.wing,location.phase,b.showPhone?1:0,b.isOpen?1:0,user.id).run();
+    await db().prepare("UPDATE users SET name=?,phone=?,room_label=?,hostel=?,wing=?,phase=?,show_phone=?,is_open=?,shop_sleeping=? WHERE id=?").bind(name,phone,location.room,location.hostel,location.wing,location.phase,b.showPhone?1:0,b.isOpen?1:0,b.isOpen?0:1,user.id).run();
     return json({ok:true});
   }
   if(path==="confirm"&&req.method==="POST") {
@@ -300,7 +303,7 @@ async function route(req:Request) {
     return await handle(req);
   }catch(e){
     if(e instanceof ApiError)return json({error:e.message},e.status);
-    if([413,507].includes((e as any)?.status))return json({error:(e as Error).message},(e as any).status);
+    if([409,413,507].includes((e as any)?.status))return json({error:(e as Error).message},(e as any).status);
     console.error("StashBox API error",e instanceof Error?e.message:"Unknown error");
     return json({error:"StashBox couldn’t complete that request. Please try again shortly."},500);
   }finally{requestBodies.delete(req);requestImages.delete(req);}

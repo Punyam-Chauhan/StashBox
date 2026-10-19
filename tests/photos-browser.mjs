@@ -27,7 +27,7 @@ try{
  assert((await page.locator('.product-card .packet-photo-frame').first().evaluate(e=>getComputedStyle(e).backgroundImage)).includes('gradient'));
  await page.screenshot({path:'outputs/packet-stock-cards.png',fullPage:true});
  sql(`UPDATE users SET role='admin' WHERE id='${id}'`);
- await page.reload();await page.getByRole('button',{name:'Maintainer',exact:true}).click();
+ await page.reload();await page.getByRole('button',{name:'Moderator',exact:true}).click();
  const manager=page.locator('.photo-manager');await manager.getByLabel('Manage product photos').selectOption({label:newName});await manager.getByText('No cached photo yet.',{exact:false}).waitFor();
  await manager.getByRole('checkbox').check();
  const image=Buffer.from(await page.evaluate(()=>{const c=document.createElement('canvas');c.width=180;c.height=240;const g=c.getContext('2d');g.fillStyle='#d84b94';g.fillRect(0,0,180,240);g.fillStyle='white';g.font='bold 20px sans-serif';g.fillText('QA PACKET',20,90);return c.toDataURL('image/png').split(',')[1];}),'base64');

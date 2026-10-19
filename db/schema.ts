@@ -10,6 +10,7 @@ export const users = sqliteTable("users", {
   upiQrId: text("upi_qr_id"),
   showPhone: integer("show_phone").notNull().default(0),
   isOpen: integer("is_open").notNull().default(1),
+  shopSleeping: integer("shop_sleeping").notNull().default(0),
   role: text("role").notNull().default("seller"),
   mustChangePassword: integer("must_change_password").notNull().default(0),
   confirmedAt: integer("confirmed_at").notNull(), createdAt: integer("created_at").notNull(),
@@ -73,6 +74,13 @@ export const marketMedia=sqliteTable("market_media",{
 export const imageStorage=sqliteTable("image_storage",{
  id:text("id").primaryKey(),objectKey:text("object_key").notNull(),byteSize:integer("byte_size").notNull(),createdAt:integer("created_at").notNull(),
 });
+export const sellerBooks=sqliteTable("seller_books",{
+ sellerId:text("seller_id").primaryKey().references(()=>users.id,{onDelete:"cascade"}),revision:integer("revision").notNull().default(0),
+});
+export const sellerLedger=sqliteTable("seller_ledger",{
+ id:text("id").primaryKey(),sellerId:text("seller_id").notNull().references(()=>users.id,{onDelete:"cascade"}),
+ productKey:text("product_key").notNull(),name:text("name").notNull(),kind:text("kind").notNull(),quantity:integer("quantity").notNull(),unitPrice:integer("unit_price").notNull(),entryDate:text("entry_date").notNull(),notes:text("notes").notNull().default(""),createdAt:integer("created_at").notNull(),
+},t=>[index("seller_ledger_owner_date").on(t.sellerId,t.entryDate)]);
 export const pawnListings=sqliteTable("pawn_listings",{
  id:text("id").primaryKey(),sellerId:text("seller_id").notNull().references(()=>users.id,{onDelete:"cascade"}),
  title:text("title").notNull(),description:text("description").notNull(),category:text("category").notNull(),
