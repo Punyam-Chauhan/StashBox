@@ -8,7 +8,7 @@ import {validatePricing,currentPrice} from "../../pricing";
 import { env } from "cloudflare:workers";
 import { CATALOG, CATEGORIES } from "../../shared";
 import { photoService, productKey, photoColumns, photoJoins, MAX_PHOTO_BYTES, imageType } from "../../server/packet-photos";
-import {PACKET_LIBRARY,libraryProduct,normalizePacketName} from "../../packet-library";
+import {PACKET_LIBRARY,libraryProduct,normalizePacketName,photoGroup} from "../../packet-library";
 
 export const dynamic = "force-dynamic";
 const DAY = 86400000;
@@ -210,7 +210,7 @@ async function handle(req:Request) {
   }
   if(path==="mine"&&req.method==="GET") {
     const user=await seller(req);
-    return json({listings:await photos().decorate((await db().prepare(`SELECT l.id,l.product_key,l.name,l.size,l.container,l.volume_ml,l.mrp,l.category,l.price,l.price_after,l.price_until,l.usual_price,l.offer_text,l.available,${photoColumns} FROM listings l ${photoJoins} WHERE l.seller_id=? ORDER BY l.updated_at DESC`).bind(user.id).all<any>()).results,true)});
+    return json({listings:await photos().decorate((await db().prepare(`SELECT l.id,l.product_key,l.name,l.size,l.container,l.volume_ml,l.mrp,l.category,l.moderation_status,l.price,l.price_after,l.price_until,l.usual_price,l.offer_text,l.available,${photoColumns} FROM listings l ${photoJoins} WHERE l.seller_id=? ORDER BY l.updated_at DESC`).bind(user.id).all<any>()).results,true)});
   }
   if(path==="mine"&&req.method==="POST") {
     const user=await seller(req);await rate(req,"add-listing",50);
@@ -219,6 +219,7 @@ async function handle(req:Request) {
     const entered=product?.name||str(b.name,70),known=libraryProduct(entered)||(await photos().directory()).find(p=>normalizePacketName(p.name)===normalizePacketName(entered));
     const name=known?.name||entered,category=known?.category||product?.category||str(b.category,40),price=Number(b.price),mrp=validMrp(b.mrp);
     if(name.length<2||!CATEGORIES.slice(1).includes(category)||!Number.isInteger(price)||price<100||price>100000)fail(400,"Choose an item and a price between ₹1 and ₹1,000.");
+    const catalogue=await db().prepare('SELECT moderation_status FROM product_catalog WHERE product_group=?').bind(photoGroup(name,category)).first<any>();if(catalogue&&catalogue.moderation_status!=='approved')fail(400,"This product is not available in the catalogue. Contact the moderator if it needs updating.");
     let pricing;try{if(!known&&!product)asciiText(b.name,"Product name",70);checkContent(name,String(b.offerText||""));pricing=validatePricing(b,price);}catch(e){fail(400,(e as Error).message);}
     const variant=drinkVariant(category,b),key=await productKey(name,category,mrp,variant.container,variant.volumeMl);
     let photoId:string|null=null;
@@ -268,6 +269,33 @@ async function handle(req:Request) {
     if(name.length<2||!CATEGORIES.slice(1).includes(category))fail(400,"Enter a product name, flavour and category.");
     try{asciiText(b.name,"Product name",70);checkContent(name);}catch(e){fail(400,(e as Error).message);}
     await photos().register(name,category,"approved");return json({ok:true});
+  }
+  if(path==="admin/products"&&req.method==="PUT") {
+    const actor=await admin(req),b=await body(req),oldName=str(b.name,70),category=str(b.category,40);let name:string;
+    try{name=asciiText(b.newName,"Product name",70);checkContent(name);}catch(e){fail(400,(e as Error).message);}
+    if(name!.length<2||!CATEGORIES.slice(1).includes(category))fail(400,"Enter a product name and category.");
+    const service=photos(),oldGroup=photoGroup(oldName,category),nextGroup=photoGroup(name!,category);
+    const directory=await service.directory(true);if(!directory.some(p=>photoGroup(p.name,p.category)===oldGroup))fail(404,"Product no longer exists.");
+    if(nextGroup!==oldGroup&&directory.some(p=>photoGroup(p.name,p.category)===nextGroup)){
+      const destination=await db().prepare("SELECT moderation_status FROM product_catalog WHERE product_group=?").bind(nextGroup).first<any>();
+      const referenced=await db().prepare("SELECT id FROM listings WHERE name=? AND category=? UNION SELECT id FROM packet_photos WHERE product_group=? LIMIT 1").bind(name!,category,nextGroup).first();
+      if(!['removed','renamed'].includes(destination?.moderation_status)||referenced)fail(409,"A product with this name already exists. Choose a distinct name.");
+    }
+    const existing=await db().prepare("SELECT moderation_status FROM product_catalog WHERE product_group=?").bind(oldGroup).first<any>();
+    const chosen=(await service.choices(oldName,category,true)).defaultPhoto;
+    await service.register(oldName,category);
+    const statements=[db().prepare("UPDATE listings SET name=?,updated_at=? WHERE name=? AND category=?").bind(name!,Date.now(),oldName,category),db().prepare("UPDATE packet_photos SET matched_name=?,product_group=? WHERE product_group=?").bind(name!,nextGroup,oldGroup)];
+    if(nextGroup!==oldGroup){
+      statements.push(db().prepare("UPDATE product_catalog SET moderation_status='renamed' WHERE product_group=?").bind(oldGroup));
+      statements.push(db().prepare("INSERT INTO product_catalog (product_group,name,category,created_at,moderation_status) VALUES (?,?,?,?,?) ON CONFLICT(product_group) DO UPDATE SET name=excluded.name,moderation_status=excluded.moderation_status").bind(nextGroup,name!,category,Date.now(),existing?.moderation_status||'approved'));
+      statements.push(db().prepare("DELETE FROM product_photo_defaults WHERE product_group=?").bind(oldGroup));
+    }else statements.push(db().prepare("UPDATE product_catalog SET name=? WHERE product_group=?").bind(name!,oldGroup));
+    const affected=(await db().prepare("SELECT id,seller_id,product_key,mrp,container,volume_ml FROM listings WHERE name=? AND category=?").bind(oldName,category).all<any>()).results;
+    for(const item of affected)if(item.mrp){const nextKey=await productKey(name!,category,item.mrp,item.container,item.volume_ml);statements.push(db().prepare("UPDATE listings SET product_key=? WHERE id=?").bind(nextKey,item.id));statements.push(db().prepare("UPDATE seller_ledger SET product_key=?,name=? WHERE seller_id=? AND product_key=?").bind(nextKey,name!+' - MRP Rs '+item.mrp/100+(item.container?' - '+item.container+' '+item.volume_ml+' ml':''),item.seller_id,item.product_key));}
+    for(const seller of new Set(affected.map(i=>i.seller_id)))statements.push(db().prepare("UPDATE seller_books SET revision=revision+1 WHERE seller_id=?").bind(seller));
+    if(chosen?.photo_id)statements.push(db().prepare("INSERT INTO product_photo_defaults (product_group,name,category,photo_id,selected_by,updated_at) VALUES (?,?,?,?,?,?) ON CONFLICT(product_group) DO UPDATE SET name=excluded.name,photo_id=excluded.photo_id,selected_by=excluded.selected_by,updated_at=excluded.updated_at").bind(nextGroup,name!,category,chosen.photo_id,actor.id,Date.now()));
+    statements.push(db().prepare("INSERT INTO audit (id,actor,target,action,created_at) VALUES (?,?,?,'rename_product',?)").bind(crypto.randomUUID(),actor.id,nextGroup,Date.now()));
+    await db().batch(statements);return json({ok:true,name:name!});
   }
   if(path==="admin/photos"&&req.method==="PUT") {
     const user=await admin(req),b=await body(req),name=str(b.name,70),category=str(b.category,40),id=str(b.photoId,100);

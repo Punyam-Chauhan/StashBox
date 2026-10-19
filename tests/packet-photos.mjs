@@ -40,6 +40,7 @@ try{
  check(cached.length===66&&cached.every(p=>p.source==='provided'&&p.original_file),'All 66 maintainer-supplied photos have explicit provenance');
  const ready=await service.choices(cached[0].name,cached[0].category);
  check(ready.defaultPhoto.photo_path===cached[0].image,'Prepared product photo works without external lookup');
+ await service.register(cached[0].name,cached[0].category);await db.prepare("UPDATE product_catalog SET moderation_status='removed' WHERE product_group=?").bind(ready.productGroup).run();check(!(await service.directory()).some(p=>p.name===cached[0].name),'Removed prepared products disappear from autocomplete');check((await service.directory(true)).some(p=>p.name===cached[0].name),'Moderator can still find removed prepared products');
  await assert.rejects(service.store(new Uint8Array(MAX_PHOTO_BYTES+1),info));checks++;console.log('PASS Oversized images rejected');
  check(imageType(new TextEncoder().encode('<svg onload="alert(1)"></svg>'))===null,'Active SVG uploads rejected');
  console.log(`${checks} shared product photo checks passed.`);

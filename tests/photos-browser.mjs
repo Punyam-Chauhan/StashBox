@@ -27,8 +27,8 @@ try{
  assert((await page.locator('.product-card .packet-photo-frame').first().evaluate(e=>getComputedStyle(e).backgroundImage)).includes('gradient'));
  await page.screenshot({path:'outputs/packet-stock-cards.png',fullPage:true});
  sql(`UPDATE users SET role='admin' WHERE id='${id}'`);
- await page.reload();await page.getByRole('button',{name:'Moderator',exact:true}).click();
- const manager=page.locator('.photo-manager');await manager.getByLabel('Manage product photos').selectOption({label:newName});await manager.getByText('No cached photo yet.',{exact:false}).waitFor();
+ await page.reload();await page.getByRole('button',{name:'Moderator',exact:true}).click();await page.locator('.moderator-tool-card').filter({hasText:'Product catalogue'}).click();
+ await page.getByRole('textbox',{name:'Search moderator entries'}).fill(newName);await page.locator('.moderator-entry').filter({hasText:newName}).getByRole('button',{name:'Edit product',exact:true}).click();const manager=page.locator('.photo-manager');await manager.getByText('No cached photo yet.',{exact:false}).waitFor();
  await manager.getByRole('checkbox').check();
  const image=Buffer.from(await page.evaluate(()=>{const c=document.createElement('canvas');c.width=180;c.height=240;const g=c.getContext('2d');g.fillStyle='#d84b94';g.fillRect(0,0,180,240);g.fillStyle='white';g.font='bold 20px sans-serif';g.fillText('QA PACKET',20,90);return c.toDataURL('image/png').split(',')[1];}),'base64');
  await manager.getByLabel('Maintainer product photo upload').setInputFiles({name:'my-packet.png',mimeType:'image/png',buffer:image});await manager.getByText('Photo cached.',{exact:false}).waitFor();await manager.getByRole('button',{name:'Current default'}).waitFor();
@@ -36,7 +36,7 @@ try{
  await page.screenshot({path:'outputs/maintainer-photo-defaults.png',fullPage:true});
  const feed=await(await context.request.get(base+'/api/listings?hostel=tagore')).json();assert(feed.listings.find(l=>l.name===newName).photo_id,'Maintainer photo replaces the vector for existing stock');
  const registry=await(await context.request.get(base+'/api/products')).json();assert(registry.products.some(p=>p.name===newName));
- await manager.locator('summary').click();await manager.getByLabel('New product name',{exact:true}).fill(newName+' Panel');await manager.getByRole('button',{name:'Add product',exact:true}).click();await manager.getByText('No cached photo yet.',{exact:false}).waitFor();
+ await page.getByRole('dialog').getByRole('button',{name:'Close dialog'}).click();await page.getByRole('button',{name:'Add product',exact:true}).click();await page.locator('.moderator-focused-panel').getByLabel('Product name',{exact:true}).fill(newName+' Panel');await page.getByRole('button',{name:'Add to catalogue',exact:true}).click();await page.getByRole('button',{name:'Add to catalogue',exact:true}).waitFor({state:'hidden'});
  assert((await(await context.request.get(base+'/api/products')).json()).products.some(p=>p.name===newName+' Panel'));
  assert.equal(errors.length,0,errors.join('\n'));
  const input=JSON.parse(readFileSync('app/packet-library.json')).filter(p=>p.image);for(const p of input){const r=await context.request.get(base+p.image);assert.equal(r.status(),200,p.name);}

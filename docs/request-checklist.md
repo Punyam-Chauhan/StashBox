@@ -31,3 +31,12 @@
 - Online product-image searching was abandoned at the user's request. The supplied library and uploads are used instead.
 
 Tests check the behaviors listed above; they do not establish that every possible interaction is bug-free.
+
+## Navigation and catalogue consolidation
+
+- Product catalogue owns product names, photos, adding/removing products and uploaded-photo management. The selected editor has a single name field and no second product selector.
+- Name edits retain shared photos, stock identity and private inventory linkage. Catalogue removal/restore and individual listing deletion have separate labels and confirmations.
+- Native paths: `/stash`, `/dashboard`, `/moderator`; Pawn uses `/pawn`, `/pawn/deploy`, `/pawn/rules`, `/pawn/moderator`. Older Pawn links migrate on opening.
+- Deploy The Pawn contains adding items, payment QR, contact/location details and existing item controls. Its moderator is separate from StashBox; its header has no snack shutter.
+- Login/change-password recovery explains identity verification, supplied room/WhatsApp contact and temporary passwords. Existing passwords remain inaccessible to moderators.
+- Duplicate snack selling callout and footer credit link removed. Original bottom hero artwork/CTA retained with rescue caption.

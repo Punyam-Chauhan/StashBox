@@ -50,14 +50,14 @@ export function photoService(db:D1Database,bucket:R2Bucket){
  async function allowed(id:unknown,_userId:string,name?:string,category?:string){
   if(id===null||id===undefined||id==="")return null;
   if(typeof id!=="string"||!await photo(id,true))throw new Error("Choose a shared packet photo or upload one.");
-  if(name&&category){const group=photoGroup(name,category),prepared=libraryPhoto(name);const uploaded=await db.prepare("SELECT id FROM packet_photos WHERE id=? AND product_group=? AND (review_status='approved' OR uploaded_by=?)").bind(id,group,_userId).first();if(prepared?.photo_id!==id&&!uploaded)throw new Error("Choose a photo for this product and flavour.");}
+  if(name&&category){const group=photoGroup(name,category),prepared=libraryPhoto(name);const uploaded=await db.prepare("SELECT id FROM packet_photos WHERE id=? AND product_group=? AND (review_status='approved' OR uploaded_by=?)").bind(id,group,_userId).first();const selected=await db.prepare("SELECT photo_id FROM product_photo_defaults WHERE product_group=?").bind(group).first<{photo_id:string}>();if(prepared?.photo_id!==id&&!uploaded&&selected?.photo_id!==id)throw new Error("Choose a photo for this product and flavour.");}
   if(name&&category){const selected=await choices(name,category);if(selected.defaultPhoto&&selected.defaultPhoto.photo_id!==id)throw new Error("Use this product's shared default image. Only the maintainer can change it.");}
   return id;
  }
  async function selectDefault(name:string,category:string,id:string,actor:string){
   const group=photoGroup(name,category),prepared=libraryPhoto(name);
   const uploaded=await db.prepare("SELECT id FROM packet_photos WHERE id=? AND product_group=?").bind(id,group).first();
-  if(prepared?.photo_id!==id&&!uploaded)throw new Error("Choose a photo from this product’s library.");
+  const selected=await db.prepare("SELECT photo_id FROM product_photo_defaults WHERE product_group=?").bind(group).first<{photo_id:string}>();if(prepared?.photo_id!==id&&!uploaded&&selected?.photo_id!==id)throw new Error("Choose a photo from this product’s library.");
   await db.batch([
    db.prepare("UPDATE packet_photos SET review_status='approved' WHERE id=?").bind(id),
    db.prepare("INSERT INTO product_photo_defaults (product_group,name,category,photo_id,selected_by,updated_at) VALUES (?,?,?,?,?,?) ON CONFLICT(product_group) DO UPDATE SET photo_id=excluded.photo_id,selected_by=excluded.selected_by,updated_at=excluded.updated_at").bind(group,name,category,id,actor,Date.now()),
@@ -78,10 +78,12 @@ export function photoService(db:D1Database,bucket:R2Bucket){
  }
  async function directory(includePending=false){
   const uploads=(await db.prepare("SELECT name,category FROM product_catalog WHERE (?=1 OR moderation_status='approved') UNION SELECT DISTINCT name,category FROM listings WHERE (?=1 OR moderation_status='approved') UNION SELECT DISTINCT matched_name AS name,category FROM packet_photos WHERE product_group IS NOT NULL AND category IS NOT NULL AND (?=1 OR review_status='approved')").bind(includePending?1:0,includePending?1:0,includePending?1:0).all<{name:string;category:string}>()).results;
+  const overrides=(await db.prepare("SELECT name,category FROM product_catalog").all<{name:string;category:string}>()).results;
   const names=new Map(PACKET_LIBRARY.map(p=>[photoGroup(p.name,p.category),{name:p.name,category:p.category,aliases:p.aliases}]));
-  const hidden=includePending?new Set<string>():new Set((await db.prepare("SELECT product_group FROM product_catalog WHERE moderation_status='rejected'").all<{product_group:string}>()).results.map(p=>p.product_group));
+  const hidden=new Set((await db.prepare("SELECT product_group FROM product_catalog WHERE moderation_status='renamed' OR (?=0 AND moderation_status IN ('rejected','removed'))").bind(includePending?1:0).all<{product_group:string}>()).results.map(p=>p.product_group));
   for(const p of uploads)if(!hidden.has(photoGroup(p.name,p.category))&&!names.has(photoGroup(p.name,p.category)))names.set(photoGroup(p.name,p.category),{...p,aliases:[]});
-  return [...names.values()].sort((a,b)=>normalizePacketName(a.name).localeCompare(normalizePacketName(b.name)));
+  for(const p of overrides){const group=photoGroup(p.name,p.category);if(names.has(group))names.set(group,{...names.get(group)!,name:p.name,category:p.category});}
+  return [...names.entries()].filter(([group])=>!hidden.has(group)).map(([,p])=>p).sort((a,b)=>normalizePacketName(a.name).localeCompare(normalizePacketName(b.name)));
  }
  async function register(name:string,category:string,status="approved"){await db.prepare("INSERT OR IGNORE INTO product_catalog (product_group,name,category,created_at,moderation_status) VALUES (?,?,?,?,?)").bind(photoGroup(name,category),name,category,Date.now(),status).run();}
  return {store,choices,allowed,selectDefault,decorate,directory,register};
