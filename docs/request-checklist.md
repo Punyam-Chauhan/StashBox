@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | Run locally, keep Git history | Local preview and Codex-authored Git checkpoints; no deployment | Build, local API health and Git checks |
 | Hostel-only snacks and free-form locations | Hostel isolation, room/wing entry, Mandakini phase separation and access notice | Integration and hostel browser tests |
-| Add bhawans later from the moderator panel | Moderator can add a bhawan; chooser, signup, profiles and server validation accept it | Hostel manager end-to-end test |
+| Manage bhawans from the moderator panel | Add, rename and delete original or later bhawans; resident accounts and last directory entry are protected; saved choices recover after deletion | Hostel manager, edit/delete and isolated original-bhawan tests |
 | Autocomplete and packet images | Supplied image library, new product entries, shared default images and vector fallback | Photo browser and packet-photo tests |
 | No alternate Stasher image for an existing product | Upload UI hidden; server rejects replacements; moderator retains default control | API integration and packet-photo tests |
 | Drink packaging variants and MRP | Can/bottle/volume variants; comparisons retain printed MRP | Integration, photo and grouped-card tests |

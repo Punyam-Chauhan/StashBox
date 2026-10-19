@@ -1,3 +1,4 @@
+import {sql} from "drizzle-orm";
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
@@ -89,4 +90,4 @@ export const pawnListings=sqliteTable("pawn_listings",{
  createdAt:integer("created_at").notNull(),updatedAt:integer("updated_at").notNull(),
 },t=>[index("pawn_status_created").on(t.status,t.createdAt),index("pawn_seller").on(t.sellerId)]);
 
-export const campusHostels=sqliteTable("campus_hostels",{id:text("id").primaryKey(),name:text("name").notNull(),short:text("short").notNull(),initials:text("initials").notNull(),createdAt:integer("created_at").notNull()});
+export const campusHostels=sqliteTable("campus_hostels",{id:text("id").primaryKey(),name:text("name").notNull(),short:text("short").notNull(),initials:text("initials").notNull(),createdAt:integer("created_at").notNull()},t=>[uniqueIndex("campus_hostels_name_unique").on(sql`lower(${t.name})`)]);

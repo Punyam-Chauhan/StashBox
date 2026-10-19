@@ -51,10 +51,15 @@ export default function Home() {
   async function refresh() {
     const version=++requestVersion.current;setError("");
     try {
-      const [items,me,registry]=await Promise.all([hostel?api("listings?hostel="+encodeURIComponent(hostel)):Promise.resolve({listings:[]}),api("me"),api("hostels")]);
+      const [me,registry]=await Promise.all([api("me"),api("hostels")]);
       if(version!==requestVersion.current)return;
-      setHostels(registry.hostels);setListings(items.listings);setUser(me.user);
-      if(!hostel){const params=new URLSearchParams(location.search);let saved="";try{saved=localStorage.getItem("stashbox.hostel")||"";}catch{}const desired=params.has("hostel")?params.get("hostel"):saved;if(isHostel(desired)){setRememberedHostel(desired);if(params.get("choose")!=="hostel")setHostel(desired);}}
+      setHostels(registry.hostels);setUser(me.user);
+      let saved="";try{saved=localStorage.getItem("stashbox.hostel")||"";}catch{}
+      if(saved&&!isHostel(saved)){try{localStorage.removeItem("stashbox.hostel");}catch{}setRememberedHostel("");}
+      if(hostel&&!isHostel(hostel)){chooseHostel("");setRememberedHostel("");return;}
+      const items=hostel?await api("listings?hostel="+encodeURIComponent(hostel)):{listings:[]};
+      if(version!==requestVersion.current)return;setListings(items.listings);
+      if(!hostel){const params=new URLSearchParams(location.search);const desired=params.has("hostel")?params.get("hostel"):saved;if(isHostel(desired)){setRememberedHostel(desired);if(params.get("choose")!=="hostel")setHostel(desired);}}
       if(me.user?.must_change_password)setModal("password");
       else if(me.user&&!me.user.hostel)setModal("profile");
     } catch(e){if(version===requestVersion.current)setError((e as Error).message);}

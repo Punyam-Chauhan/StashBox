@@ -1,3 +1,4 @@
+import {manageHostels} from "../../server/hostel-management";
 import {hostelDirectory,registeredHostel} from "../../server/hostels";
 import {sellerDashboard} from "../../server/seller-dashboard";
 import {community} from "../../server/community";
@@ -95,6 +96,7 @@ async function handle(req:Request) {
     if(Number(req.headers.get("content-length")||0)>(path==="photos/upload"?MAX_PHOTO_BYTES:16000))fail(413,"Request is too large.");
   }
   if(path==="hostels"&&req.method==="GET")return json({hostels:await hostelDirectory(db())});
+  if(path.startsWith("admin/hostels")&&!(path==="admin/hostels"&&req.method==="POST")){const actor=await admin(req);if(req.method!=="GET")await rate(req,"hostel-manage",60);try{return await manageHostels(req,path,db(),actor,()=>body(req));}catch(e){if(e instanceof ApiError)throw e;fail(400,(e as Error).message);}}
   if(path==="admin/hostels"&&req.method==="POST"){
     const actor=await admin(req);await rate(req,"hostel-create",20);const b=await body(req);let name;try{name=asciiText(b.name,"Bhawan name",70);checkContent(name);}catch(e){fail(400,(e as Error).message);}if(name!.length<2||!/[a-z]/i.test(name!))fail(400,"Enter a bhawan name.");
     const list=await hostelDirectory(db()),id=name!.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');if(list.length>=100)fail(400,"The campus directory is full. Contact support.");if(list.some(h=>h.id===id||h.name.toLowerCase()===name!.toLowerCase()))fail(409,"That bhawan is already in your directory.");
@@ -160,7 +162,7 @@ async function handle(req:Request) {
     const existing=await db().prepare("SELECT id FROM users WHERE email=? OR student_id=?").bind(email,studentId).first();
     if(existing)fail(409,"That email or student ID is already registered. Try logging in.");
     const id=crypto.randomUUID(),salt=randomToken(16),now=Date.now();
-    try {await db().prepare("INSERT INTO users (id,name,email,student_id,phone,room,room_label,hostel,wing,phase,password_hash,salt,show_phone,is_open,role,must_change_password,confirmed_at,created_at) VALUES (?,?,?,?,?,0,?,?,?,?,?,?,0,1,'seller',0,?,?)").bind(id,name,email,studentId,phone,location.room,location.hostel,location.wing,location.phase,await hashPassword(password,salt),salt,now,now).run();}
+    try {const inserted=await db().prepare("INSERT INTO users (id,name,email,student_id,phone,room,room_label,hostel,wing,phase,password_hash,salt,show_phone,is_open,role,must_change_password,confirmed_at,created_at) SELECT ?,?,?,?,?,0,?,?,?,?,?,?,0,1,'seller',0,?,? WHERE EXISTS(SELECT 1 FROM campus_hostels WHERE id=?)").bind(id,name,email,studentId,phone,location.room,location.hostel,location.wing,location.phase,await hashPassword(password,salt),salt,now,now,location.hostel).run();if(!inserted.meta.changes)fail(400,"That bhawan was removed. Choose another hostel and try again.");}
     catch(e){if(String(e).includes("UNIQUE"))fail(409,"That email or student ID is already registered.");throw e;}
     return loginResponse(req,id);
   }
@@ -198,7 +200,7 @@ async function handle(req:Request) {
     const location=await parseLocation(b);
     try{asciiText(b.name,"Name",60);checkContent(name);}catch(e){fail(400,(e as Error).message);}
     if(name.length<2||!/^\+?\d{10,15}$/.test(phone))fail(400,"Check your name and phone.");
-    await db().prepare("UPDATE users SET name=?,phone=?,room_label=?,hostel=?,wing=?,phase=?,show_phone=?,is_open=?,shop_sleeping=? WHERE id=?").bind(name,phone,location.room,location.hostel,location.wing,location.phase,b.showPhone?1:0,b.isOpen?1:0,b.isOpen?0:1,user.id).run();
+    const updated=await db().prepare("UPDATE users SET name=?,phone=?,room_label=?,hostel=?,wing=?,phase=?,show_phone=?,is_open=?,shop_sleeping=? WHERE id=? AND EXISTS(SELECT 1 FROM campus_hostels WHERE id=?)").bind(name,phone,location.room,location.hostel,location.wing,location.phase,b.showPhone?1:0,b.isOpen?1:0,b.isOpen?0:1,user.id,location.hostel).run();if(!updated.meta.changes)fail(400,"That bhawan was removed. Choose another hostel and try again.");
     return json({ok:true});
   }
   if(path==="confirm"&&req.method==="POST") {
