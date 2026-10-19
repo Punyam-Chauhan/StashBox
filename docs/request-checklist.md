@@ -58,3 +58,10 @@ Tests check the behaviors listed above; they do not establish that every possibl
 - Both drawer brands, app switches, close controls and navigation sections use consistent spacing.
 - Pawn browsing restores its descriptive copy, motto and buy/sell seal below the shop name, preserving the dusky palette.
 - Interactions use short opacity/colour/transform transitions; reduced-motion preference disables added motion.
+
+## Subtle interaction motion
+
+- Header and shop menus ease in and out; closing can be interrupted to reopen. Outside clicks and Escape retain native details behavior.
+- The mobile drawer and its backdrop ease independently without blurring the entire page.
+- Buttons, filters and icons use brief colour/press feedback. No looping or layout-heavy animation is added.
+- Reduced-motion preference disables the added animation and delayed closing.

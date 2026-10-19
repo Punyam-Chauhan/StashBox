@@ -91,3 +91,15 @@
 @media(prefers-reduced-motion:reduce){.button,.nav-item,.product-card,.pawn-card,.upi-pill,.header-shop-control>summary,.header-quick-nav>summary,.sidebar{transition:none!important}.header-quick-nav[open]>nav,.header-shop-control[open]>.shop-control-menu,.modal[open]{animation:none!important}.button:active,.upi-pill:active,.product-card:hover,.pawn-card:hover{transform:none}}
 
 .pawn-masthead-vintage .pawn-intro{border-bottom:0;padding-bottom:0}
+
+/* Composited, brief interactions; no page-wide blur or layout animation. */
+:root{--motion-quick:160ms;--motion-ease:cubic-bezier(.2,.8,.2,1)}
+.header-quick-nav[open]>nav,.header-shop-control[open]>.shop-control-menu{animation:menu-settle 180ms var(--motion-ease)}
+.header-quick-nav[data-closing] nav,.header-shop-control[data-closing]>.shop-control-menu{animation:menu-leave 130ms ease-in both;pointer-events:none}
+.icon-btn,.stock-button,.categories button,.header-quick-nav nav button,.shop-control-menu>button{transition:background-color var(--motion-quick) ease,color var(--motion-quick) ease,border-color var(--motion-quick) ease,transform var(--motion-quick) ease}
+.icon-btn:active,.stock-button:active,.categories button:active{transform:scale(.97)}
+@keyframes menu-leave{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-3px)}}
+@media(max-width:720px){.sidebar,.pawn-mode .sidebar{transition:transform 240ms var(--motion-ease);will-change:transform;backface-visibility:hidden}.drawer-backdrop{display:block;opacity:0;visibility:hidden;pointer-events:none;backdrop-filter:none;transition:opacity 200ms ease,visibility 0s linear 240ms}.drawer-backdrop.is-visible{opacity:1;visibility:visible;pointer-events:auto;transition-delay:0s}.modal::backdrop{backdrop-filter:none}.modal[open]{animation:surface-in 160ms ease-out}}
+@media(prefers-reduced-motion:reduce){.header-quick-nav[open]>nav,.header-shop-control[open]>.shop-control-menu,.header-quick-nav[data-closing] nav,.header-shop-control[data-closing]>.shop-control-menu,.modal[open]{animation:none!important}.sidebar,.drawer-backdrop,.icon-btn,.stock-button,.categories button,.header-quick-nav nav button,.shop-control-menu>button{transition:none!important;will-change:auto}.icon-btn:active,.stock-button:active,.categories button:active{transform:none}}
+.pack-variant[open]>.offer-list,.seller-payments[open]>.form{animation:surface-in 160ms ease-out}
+@media(prefers-reduced-motion:reduce){.pack-variant[open]>.offer-list,.seller-payments[open]>.form{animation:none}}

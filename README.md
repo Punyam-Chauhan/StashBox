@@ -1,5 +1,7 @@
 # StashBox
 
+Interaction motion is shared through `app/use-details-motion.ts`: native details menus have brief entry/exit, interrupted closing can reopen, and outside/Escape behavior is preserved. The mobile drawer uses a 240 ms transform with an opacity-only backdrop. Mobile blur is removed; reduced-motion users get immediate transitions. `node tests/menu-motion.mjs` checks these behaviors.
+
 ## Navigation and moderator workspace
 
 StashBox uses native pages: `/` for snacks/hostel selection, `/stash` for public stock management, `/dashboard` for the private Stasher notebook and `/moderator` for moderator tools. The Pawn Shop is a separate experience at `/pawn`, with `/pawn/deploy`, `/pawn/rules` and `/pawn/moderator`. Older Pawn links are canonicalized. Browser back/forward and direct reloads retain the page. Authentication is shared. The snack shutter is never shown inside Pawn Shop. Closed snack stashes are excluded from browsing and comparison. There is no Open now filter.
