@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
-const source=ts.transpileModule(fs.readFileSync('app/pricing.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
+const moderation=ts.transpileModule(fs.readFileSync("app/moderation.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
+const source=ts.transpileModule(fs.readFileSync('app/pricing.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText.replace('"./moderation"',JSON.stringify('data:text/javascript;base64,'+Buffer.from(moderation).toString('base64')));
 const {currentPrice,activeOffer,validatePricing,istInput,parseIST}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const now=Date.now(),until=now+10000,item={price:2000,price_after:2500,price_until:until,usual_price:2500,offer_text:'Midnight deal'};
 assert.equal(currentPrice(item,until-1),2000);assert.equal(currentPrice(item,until),2500);assert.equal(currentPrice(item,until+1),2500);

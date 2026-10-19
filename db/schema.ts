@@ -7,6 +7,7 @@ export const users = sqliteTable("users", {
   // Preserve the old numeric room column; new locations are entered as text.
   roomLabel: text("room_label"), hostel: text("hostel"), wing: text("wing"), phase: text("phase"),
   passwordHash: text("password_hash").notNull(), salt: text("salt").notNull(),
+  upiQrId: text("upi_qr_id"),
   showPhone: integer("show_phone").notNull().default(0),
   isOpen: integer("is_open").notNull().default(1),
   role: text("role").notNull().default("seller"),
@@ -21,6 +22,7 @@ export const sessions = sqliteTable("sessions", {
 export const listings = sqliteTable("listings", {
   id: text("id").primaryKey(),
   sellerId: text("seller_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  moderationStatus: text("moderation_status").notNull().default("approved"),
   productKey: text("product_key").notNull(), name: text("name").notNull(),
   size: text("size").notNull(), category: text("category").notNull(),
   mrp: integer("mrp"), photoId: text("photo_id"),
@@ -35,6 +37,7 @@ export const rateLimits = sqliteTable("rate_limits", {
 });
 // Open archive metadata stays separate from students, stock and selling prices.
 export const packetPhotos = sqliteTable("packet_photos", {
+  reviewStatus: text("review_status").notNull().default("approved"),
   id: text("id").primaryKey(), objectKey: text("object_key").notNull(),
   contentType: text("content_type").notNull(), source: text("source").notNull(),
   sourceUrl: text("source_url"), credit: text("credit").notNull(), license: text("license"),
@@ -48,6 +51,7 @@ export const productPhotoDefaults = sqliteTable("product_photo_defaults", {
   selectedBy:text("selected_by").notNull(), updatedAt:integer("updated_at").notNull(),
 });
 export const productCatalog = sqliteTable("product_catalog", {
+  moderationStatus:text("moderation_status").notNull().default("approved"),
   productGroup:text("product_group").primaryKey(),name:text("name").notNull(),
   category:text("category").notNull(),createdAt:integer("created_at").notNull(),
 });
@@ -60,3 +64,19 @@ export const audit = sqliteTable("audit", {
   target: text("target").notNull(), action: text("action").notNull(),
   createdAt: integer("created_at").notNull(),
 });
+
+export const marketMedia=sqliteTable("market_media",{
+ id:text("id").primaryKey(),ownerId:text("owner_id").notNull().references(()=>users.id,{onDelete:"cascade"}),
+ kind:text("kind").notNull(),objectKey:text("object_key").notNull(),contentType:text("content_type").notNull(),
+ status:text("status").notNull().default("pending"),createdAt:integer("created_at").notNull(),
+});
+export const imageStorage=sqliteTable("image_storage",{
+ id:text("id").primaryKey(),objectKey:text("object_key").notNull(),byteSize:integer("byte_size").notNull(),createdAt:integer("created_at").notNull(),
+});
+export const pawnListings=sqliteTable("pawn_listings",{
+ id:text("id").primaryKey(),sellerId:text("seller_id").notNull().references(()=>users.id,{onDelete:"cascade"}),
+ title:text("title").notNull(),description:text("description").notNull(),category:text("category").notNull(),
+ condition:text("condition").notNull(),price:integer("price").notNull(),photoId:text("photo_id"),
+ status:text("status").notNull().default("pending"),available:integer("available").notNull().default(1),
+ createdAt:integer("created_at").notNull(),updatedAt:integer("updated_at").notNull(),
+},t=>[index("pawn_status_created").on(t.status,t.createdAt),index("pawn_seller").on(t.sellerId)]);

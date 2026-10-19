@@ -1,3 +1,4 @@
+import {asciiText,checkContent} from "./moderation";
 export type Pricing = {price:number;price_after?:number|null;price_until?:number|null;usual_price?:number|null;offer_text?:string|null};
 export function currentPrice(item:Pricing,now=Date.now()){return item.price_until!=null&&item.price_after!=null&&now>=item.price_until?item.price_after:item.price;}
 export function activeOffer(item:Pricing,now=Date.now()){return !item.price_until||now<item.price_until;}
@@ -15,5 +16,6 @@ export function validatePricing(body:any,price:number,previous?:Pricing,now=Date
  if(after!==null&&until===null)throw new Error('Choose when the selling price changes.');
  if(usual!==null&&(!validMoney(usual)||usual<=price))throw new Error('The usual price must be higher than your current selling price.');
  if(typeof note!=='string'||note.trim().length>100)throw new Error('Keep the offer note within 100 characters.');
+ asciiText(note,'Offer note',100,false);checkContent(note);
  return {price_after:after,price_until:until,usual_price:usual,offer_text:note.trim()||null};
 }

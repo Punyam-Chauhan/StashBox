@@ -31,12 +31,12 @@ try{
   const variants=(await call('mine','GET',undefined,a.cookie)).data.listings;
   check(variants.length===2&&new Set(variants.map(l=>l.product_key)).size===2,'Same snack with different MRPs has separate listings');
   const variant=variants.find(l=>l.mrp===2000);await call(`mine/${variant.id}`,'DELETE',undefined,a.cookie);
-  const rawImage=Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jH3sAAAAASUVORK5CYII=','base64'));
-  const upload=await fetch(base+'/api/photos/upload?name=Oreo%20Original&category=Sweet%20tooth',{method:'POST',headers:{Cookie:a.cookie,'Content-Type':'image/png','X-Photo-Rights':'confirmed'},body:rawImage});
+  const rawImage=new Uint8Array(readFileSync(new URL('./fixtures/test-pixel.webp',import.meta.url)));
+  const upload=await fetch(base+'/api/photos/upload?name=Oreo%20Original&category=Sweet%20tooth',{method:'POST',headers:{Cookie:a.cookie,'Content-Type':'image/webp','X-Photo-Rights':'confirmed'},body:rawImage});
   const uploaded=await upload.json();check(upload.status===200&&uploaded.photo.photo_source==='seller','Seller can upload a permitted packet photo');
-  const imageResponse=await fetch(base+'/api/photos/'+uploaded.photo.photo_id);check(imageResponse.status===200&&imageResponse.headers.get('content-type')==='image/png'&&new Uint8Array(await imageResponse.arrayBuffer()).length===rawImage.length,'Cached image served through local server');
-  check((await fetch(base+'/api/photos/upload',{method:'POST',headers:{Cookie:a.cookie,'Content-Type':'image/png'},body:rawImage})).status===400,'Photo reuse permission required');
-  check((await fetch(base+'/api/photos/upload',{method:'POST',headers:{'Content-Type':'image/png','X-Photo-Rights':'confirmed'},body:rawImage})).status===401,'Anonymous uploads rejected');
+  const imageResponse=await fetch(base+'/api/photos/'+uploaded.photo.photo_id);check(imageResponse.status===200&&imageResponse.headers.get('content-type')==='image/webp'&&new Uint8Array(await imageResponse.arrayBuffer()).length===rawImage.length,'Cached image served through local server');
+  check((await fetch(base+'/api/photos/upload',{method:'POST',headers:{Cookie:a.cookie,'Content-Type':'image/webp'},body:rawImage})).status===400,'Photo reuse permission required');
+  check((await fetch(base+'/api/photos/upload',{method:'POST',headers:{'Content-Type':'image/webp','X-Photo-Rights':'confirmed'},body:rawImage})).status===401,'Anonymous uploads rejected');
   check((await fetch(base+'/api/photos/upload',{method:'POST',headers:{Cookie:a.cookie,'Content-Type':'image/svg+xml','X-Photo-Rights':'confirmed'},body:'<svg></svg>'})).status===415,'Unsafe SVG upload rejected');
   const bItem=(await call('mine','GET',undefined,b.cookie)).data.listings[0];
   check((await call(`mine/${bItem.id}`,'PUT',{price:3000,available:true,photoId:uploaded.photo.photo_id},b.cookie)).status===200,'Shared product uploads can be reused by another seller');
@@ -129,7 +129,7 @@ try{
   check((await call('mine','GET',undefined,a.cookie)).data.listings.find(l=>l.id===timed.id)?.price_until===null,'Manual quick price update clears old schedule');
   const adminName=newName+' Admin';
   check((await call('admin/products','POST',{name:adminName,category:'Sweet tooth'},a.cookie)).status===200,'Maintainer can create a product before uploading its image');
-  const photoUpload=await fetch(base+'/api/photos/upload?name='+encodeURIComponent(adminName)+'&category=Sweet%20tooth',{method:'POST',headers:{Cookie:a.cookie,'Content-Type':'image/png','X-Photo-Rights':'confirmed'},body:rawImage});
+  const photoUpload=await fetch(base+'/api/photos/upload?name='+encodeURIComponent(adminName)+'&category=Sweet%20tooth',{method:'POST',headers:{Cookie:a.cookie,'Content-Type':'image/webp','X-Photo-Rights':'confirmed'},body:rawImage});
   const adminPhoto=await photoUpload.json();
   check(photoUpload.status===200,'Maintainer can upload to the product library');
   check((await call('admin/photos','PUT',{name:adminName,category:'Sweet tooth',photoId:adminPhoto.photo.photo_id},a.cookie)).status===200,'Maintainer can choose the shared default image');

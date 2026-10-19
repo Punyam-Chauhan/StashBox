@@ -1,3 +1,6 @@
+import {community} from "../../server/community";
+import {asciiText,checkContent,prohibitedReason} from "../../moderation";
+import {libraryPhoto} from "../../packet-library";
 import {validatePricing,currentPrice} from "../../pricing";
 import { env } from "cloudflare:workers";
 import { CATALOG, CATEGORIES, isHostel } from "../../shared";
@@ -30,7 +33,7 @@ function json(value:unknown,status=200,headers:Record<string,string>={}) {
 function str(value:unknown,max=120) { return typeof value==="string" ? value.trim().slice(0,max) : ""; }
 function parseLocation(value:any) {
   const room=String(value.room??"").trim(),wing=String(value.wing??"").trim(),hostel=value.hostel;
-  const label=/^[\p{L}\p{N}][\p{L}\p{N} .\/-]{0,23}$/u;
+  const label=/^[A-Za-z0-9][A-Za-z0-9 .\/-]{0,23}$/;
   if(!isHostel(hostel)||!label.test(room)||!label.test(wing))fail(400,"Choose your hostel and enter a room and wing (up to 24 letters, numbers, spaces, / or -).");
   const phase=hostel==="mandakini"?String(value.phase??""):null;
   if(hostel==="mandakini"&&!["1","2","3"].includes(phase!))fail(400,"Choose Mandakini Phase 1, 2 or 3.");
@@ -48,7 +51,7 @@ async function hashPassword(password:string,salt:string) {
   return Array.from(new Uint8Array(bits),b=>b.toString(16).padStart(2,"0")).join("");
 }
 function equal(a:string,b:string) { let diff=a.length^b.length; for(let i=0;i<Math.max(a.length,b.length);i++)diff|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0); return diff===0; }
-const safeColumns="u.id,u.name,u.email,u.student_id,u.phone,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,u.show_phone,u.is_open,u.role,u.must_change_password,u.confirmed_at";
+const safeColumns="u.upi_qr_id,u.id,u.name,u.email,u.student_id,u.phone,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,u.show_phone,u.is_open,u.role,u.must_change_password,u.confirmed_at";
 async function currentUser(req:Request,required=true) {
   const token=req.headers.get("cookie")?.match(/(?:^|;\s*)stash_session=([a-f0-9]{64})(?:;|$)/)?.[1];
   const user=token ? await db().prepare(`SELECT ${safeColumns} FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?`).bind(await digest(token),Date.now()).first<any>() : null;
@@ -89,21 +92,23 @@ async function handle(req:Request) {
     const origin=req.headers.get("origin");if(origin&&origin!==url.origin)fail(403,"Please use StashBox directly.");
     if(Number(req.headers.get("content-length")||0)>(path==="photos/upload"?MAX_PHOTO_BYTES:16000))fail(413,"Request is too large.");
   }
+  if(path.startsWith("pawn")||path.startsWith("market/")||path==="payment-qr"||path==="admin/review"){try{const result=await community(req,path,{db:db(),bucket:env.BUCKET!,user:await currentUser(req,false),bytes:requestImages.get(req),body:()=>body(req),rate:()=>rate(req,"community-write",30)});if(result)return result;}catch(e){fail((e as any).status||400,(e as Error).message);}}
   if(path==="photos/library"&&req.method==="GET") {
     const name=str(url.searchParams.get("name"),70),category=str(url.searchParams.get("category"),40);
     if(name.length<2||!CATEGORIES.slice(1).includes(category))fail(400,"Choose a product and category.");
-    return json(await photos().choices(name,category));
+    return json(await photos().choices(name,category,(await currentUser(req,false))?.role==="admin"));
   }
   if(path==="photos/upload"&&req.method==="POST") {
     const user=await seller(req);await rate(req,"photo-upload",12,15*60000,user.id);
     if(req.headers.get("x-photo-rights")!=="confirmed")fail(400,"Confirm you own this photo or have permission to share it.");
     const bytes=requestImages.get(req);
-    if(!bytes||!imageType(bytes)||req.headers.get("content-type")!==imageType(bytes))fail(415,"Upload a JPEG, PNG or WebP photo.");
+    if(!bytes||imageType(bytes)!=="image/webp"||req.headers.get("content-type")!=="image/webp")fail(415,"Use StashBox to convert and upload a compressed WebP photo.");
     const count=await db().prepare("SELECT COUNT(*) AS n FROM packet_photos").first<{n:number}>();
     if(count!.n>=3000)fail(507,"Photo storage is full. Please contact the maintainer.");
     const name=str(url.searchParams.get("name"),70),category=str(url.searchParams.get("category"),40);
+    try{if(!libraryProduct(name))asciiText(name,"Product name",70);checkContent(name);}catch(e){fail(400,(e as Error).message);}
     if(name.length<2||!CATEGORIES.slice(1).includes(category))fail(400,"Enter the product name and category before uploading.");
-    const photo=await photos().store(bytes,{source:"seller",sourceUrl:null,credit:"Seller photo · shared with permission",license:null,name,category,owner:user.id});
+    const photo=await photos().store(bytes,{source:user.role==="admin"?"maintainer":"seller",sourceUrl:null,credit:user.role==="admin"?"Maintainer photo":"Seller photo - shared with permission",license:null,name,category,owner:user.id});
     return json({photo});
   }
   if(path==="photos/credits"&&req.method==="GET") {
@@ -112,32 +117,34 @@ async function handle(req:Request) {
   }
   const photoId=path.match(/^photos\/([a-z0-9-]{36})$/)?.[1];
   if(photoId&&req.method==="GET") {
-    const row=await db().prepare("SELECT object_key,content_type FROM packet_photos WHERE id=?").bind(photoId).first<any>();
+    const row=await db().prepare("SELECT object_key,content_type,review_status,uploaded_by FROM packet_photos WHERE id=?").bind(photoId).first<any>();
+    if(row&&row.review_status!=="approved"){const viewer=await currentUser(req,false);if(viewer?.id!==row.uploaded_by&&viewer?.role!=="admin")fail(404,"Photo not found.");}
     if(!row||!env.BUCKET)fail(404,"Photo not found.");
     const object=await env.BUCKET.get(row.object_key);if(!object)fail(404,"Photo not found.");
-    return new Response(object.body,{headers:{"Content-Type":row.content_type,"Cache-Control":"public,max-age=31536000,immutable","X-Content-Type-Options":"nosniff","ETag":object.httpEtag}});
+    return new Response(object.body,{headers:{"Content-Type":row.content_type,"Cache-Control":"private,no-store","X-Content-Type-Options":"nosniff","ETag":object.httpEtag}});
   }
   if(path==="me"&&req.method==="GET")return json({user:await currentUser(req,false)});
   if(path==="products"&&req.method==="GET") {
-    const products=await photos().directory();
+    const products=(await photos().directory()).filter(p=>!prohibitedReason(p.name));
     const variants=(await db().prepare("SELECT DISTINCT name,container,volume_ml FROM listings WHERE category='Drinks' AND container IS NOT NULL AND volume_ml IS NOT NULL").all<any>()).results;
     return json({products:products.map(p=>({...p,variants:p.category==="Drinks"?variants.filter(v=>normalizePacketName(v.name)===normalizePacketName(p.name)).map(v=>({container:v.container,volumeMl:v.volume_ml})):[]}))});
   }
   if(path==="listings"&&req.method==="GET") {
     const hostel=url.searchParams.get("hostel");
     if(!isHostel(hostel))fail(400,"Choose a hostel to see its listings.");
-    const rows=await db().prepare(`SELECT l.id,l.product_key,l.name,l.size,l.container,l.volume_ml,l.mrp,l.category,l.price,l.price_after,l.price_until,l.usual_price,l.offer_text,l.available,l.seller_id,${photoColumns},
+    const rows=await db().prepare(`SELECT l.id,l.product_key,l.name,l.size,l.container,l.volume_ml,l.mrp,l.moderation_status,l.category,l.price,l.price_after,l.price_until,l.usual_price,l.offer_text,l.available,l.seller_id,${photoColumns},
       u.name AS seller_name,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,
-      CASE WHEN u.show_phone=1 THEN u.phone ELSE NULL END AS phone,u.is_open,u.confirmed_at
-      FROM listings l JOIN users u ON u.id=l.seller_id ${photoJoins}
-      WHERE l.available=1 AND u.confirmed_at>? AND u.hostel=? AND u.wing IS NOT NULL
+      CASE WHEN u.show_phone=1 THEN u.phone ELSE NULL END AS phone,u.is_open,u.confirmed_at,CASE WHEN qr.status='approved' THEN u.upi_qr_id ELSE NULL END AS upi_qr_id
+      FROM listings l JOIN users u ON u.id=l.seller_id LEFT JOIN market_media qr ON qr.id=u.upi_qr_id ${photoJoins}
+      WHERE l.moderation_status='approved' AND l.available=1 AND u.confirmed_at>? AND u.hostel=? AND u.wing IS NOT NULL
       AND (u.hostel!='mandakini' OR u.phase IN ('1','2','3')) ORDER BY l.price,l.id`).bind(Date.now()-DAY,hostel).all<any>();
-    return json({hostel,listings:(await photos().decorate(rows.results)).map(o=>({...o,effective_price:currentPrice(o)}))});
+    return json({hostel,listings:(await photos().decorate(rows.results.filter(r=>!prohibitedReason(r.name+" "+(r.offer_text||""))))).map(o=>({...o,effective_price:currentPrice(o)}))});
   }
   if(path==="signup"&&req.method==="POST") {
     await rate(req,"signup",8,15*60000);
     const b=await body(req), name=str(b.name,60),email=str(b.email,120).toLowerCase(),studentId=str(b.studentId,40).toLowerCase(),phone=str(b.phone,20).replace(/[\s()-]/g,"");
     const location=parseLocation(b),password=validatePassword(b.password);
+    try{asciiText(b.name,"Name",60);asciiText(b.email,"Email",120);checkContent(name);}catch(e){fail(400,(e as Error).message);}
     if(name.length<2||!/^\S+@\S+\.\S+$/.test(email)||!/^[-a-z0-9_/.]{3,40}$/.test(studentId)||!/^\+?\d{10,15}$/.test(phone))fail(400,"Check your name, email, student ID and phone number.");
     const existing=await db().prepare("SELECT id FROM users WHERE email=? OR student_id=?").bind(email,studentId).first();
     if(existing)fail(409,"That email or student ID is already registered. Try logging in.");
@@ -178,6 +185,7 @@ async function handle(req:Request) {
     const user=await seller(req),b=await body(req);
     const name=str(b.name,60),phone=str(b.phone,20).replace(/[\s()-]/g,"");
     const location=parseLocation(b);
+    try{asciiText(b.name,"Name",60);checkContent(name);}catch(e){fail(400,(e as Error).message);}
     if(name.length<2||!/^\+?\d{10,15}$/.test(phone))fail(400,"Check your name and phone.");
     await db().prepare("UPDATE users SET name=?,phone=?,room_label=?,hostel=?,wing=?,phase=?,show_phone=?,is_open=? WHERE id=?").bind(name,phone,location.room,location.hostel,location.wing,location.phase,b.showPhone?1:0,b.isOpen?1:0,user.id).run();
     return json({ok:true});
@@ -189,7 +197,7 @@ async function handle(req:Request) {
   }
   if(path==="mine"&&req.method==="GET") {
     const user=await seller(req);
-    return json({listings:await photos().decorate((await db().prepare(`SELECT l.id,l.product_key,l.name,l.size,l.container,l.volume_ml,l.mrp,l.category,l.price,l.price_after,l.price_until,l.usual_price,l.offer_text,l.available,${photoColumns} FROM listings l ${photoJoins} WHERE l.seller_id=? ORDER BY l.updated_at DESC`).bind(user.id).all<any>()).results)});
+    return json({listings:await photos().decorate((await db().prepare(`SELECT l.id,l.product_key,l.name,l.size,l.container,l.volume_ml,l.mrp,l.category,l.price,l.price_after,l.price_until,l.usual_price,l.offer_text,l.available,${photoColumns} FROM listings l ${photoJoins} WHERE l.seller_id=? ORDER BY l.updated_at DESC`).bind(user.id).all<any>()).results,true)});
   }
   if(path==="mine"&&req.method==="POST") {
     const user=await seller(req);await rate(req,"add-listing",50);
@@ -198,33 +206,34 @@ async function handle(req:Request) {
     const entered=product?.name||str(b.name,70),known=libraryProduct(entered)||(await photos().directory()).find(p=>normalizePacketName(p.name)===normalizePacketName(entered));
     const name=known?.name||entered,category=known?.category||product?.category||str(b.category,40),price=Number(b.price),mrp=validMrp(b.mrp);
     if(name.length<2||!CATEGORIES.slice(1).includes(category)||!Number.isInteger(price)||price<100||price>100000)fail(400,"Choose an item and a price between ₹1 and ₹1,000.");
-    let pricing;try{pricing=validatePricing(b,price);}catch(e){fail(400,(e as Error).message);}
+    let pricing;try{if(!known&&!product)asciiText(b.name,"Product name",70);checkContent(name,String(b.offerText||""));pricing=validatePricing(b,price);}catch(e){fail(400,(e as Error).message);}
     const variant=drinkVariant(category,b),key=await productKey(name,category,mrp,variant.container,variant.volumeMl);
     let photoId:string|null=null;
     if(b.photoId){try{photoId=await photos().allowed(b.photoId,user.id,name,category);}catch(e){fail(400,(e as Error).message);}}
     const count=await db().prepare("SELECT COUNT(*) AS n FROM listings WHERE seller_id=?").bind(user.id).first<{n:number}>();
     if(count!.n>=30)fail(400,"You can list up to 30 items. Remove an old listing first.");
-    const id=crypto.randomUUID();
+    const id=crypto.randomUUID(),moderationStatus="approved";
     // 'none' means the seller deliberately declined a shared library picture.
-    await db().prepare("INSERT INTO listings (id,seller_id,product_key,name,size,mrp,category,price,photo_id,container,volume_ml,price_after,price_until,usual_price,offer_text,available,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?) ON CONFLICT(seller_id,product_key) DO UPDATE SET price=excluded.price,price_after=excluded.price_after,price_until=excluded.price_until,usual_price=excluded.usual_price,offer_text=excluded.offer_text,photo_id=excluded.photo_id,available=1,updated_at=excluded.updated_at").bind(id,user.id,key,name,variant.size,mrp,category,price,photoId||(b.photoChoice==="none"?"none":null),variant.container,variant.volumeMl,pricing.price_after,pricing.price_until,pricing.usual_price,pricing.offer_text,Date.now()).run();
-    await photos().register(name,category);
-    return json({ok:true});
+    await db().prepare("INSERT INTO listings (id,seller_id,product_key,name,size,mrp,category,price,photo_id,container,volume_ml,price_after,price_until,usual_price,offer_text,moderation_status,available,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?) ON CONFLICT(seller_id,product_key) DO UPDATE SET moderation_status=excluded.moderation_status,price=excluded.price,price_after=excluded.price_after,price_until=excluded.price_until,usual_price=excluded.usual_price,offer_text=excluded.offer_text,photo_id=excluded.photo_id,available=1,updated_at=excluded.updated_at").bind(id,user.id,key,name,variant.size,mrp,category,price,photoId||(b.photoChoice==="none"?"none":null),variant.container,variant.volumeMl,pricing.price_after,pricing.price_until,pricing.usual_price,pricing.offer_text,moderationStatus,Date.now()).run();
+    await photos().register(name,category,moderationStatus);
+    return json({ok:true,moderation_status:moderationStatus});
   }
   const itemId=path.match(/^mine\/([a-z0-9-]+)$/)?.[1];
   if(itemId&&(req.method==="PUT"||req.method==="DELETE")) {
     const user=await seller(req);
-    const own=await db().prepare("SELECT id,name,category,mrp,photo_id,product_key,container,volume_ml,size,price,price_after,price_until,usual_price,offer_text FROM listings WHERE id=? AND seller_id=?").bind(itemId,user.id).first<any>();
+    const own=await db().prepare("SELECT id,name,category,mrp,photo_id,product_key,container,volume_ml,size,moderation_status,price,price_after,price_until,usual_price,offer_text FROM listings WHERE id=? AND seller_id=?").bind(itemId,user.id).first<any>();
     if(!own)fail(404,"Listing not found in your stash.");
     if(req.method==="DELETE")await db().prepare("DELETE FROM listings WHERE id=? AND seller_id=?").bind(itemId,user.id).run();
     else {
       const b=await body(req),price=Number(b.price);
       if(!Number.isInteger(price)||price<100||price>100000||typeof b.available!=="boolean")fail(400,"Check the price and availability.");
-      let pricing;try{pricing=validatePricing(b,price,own);}catch(e){fail(400,(e as Error).message);}
+      let pricing;try{checkContent(own.name,String(b.offerText??own.offer_text??""));pricing=validatePricing(b,price,own);}catch(e){fail(400,(e as Error).message);}
       const variant=b.container===undefined?{container:own.container,volumeMl:own.volume_ml,size:own.size}:drinkVariant(own.category,b);
       const mrp=b.mrp===undefined?own.mrp:validMrp(b.mrp),key=mrp?await productKey(own.name,own.category,mrp,variant.container,variant.volumeMl):own.product_key;
       let photoId=own.photo_id;
       if(b.photoId!==undefined){try{photoId=(b.photoId?await photos().allowed(b.photoId,user.id,own.name,own.category):"none");}catch(e){fail(400,(e as Error).message);}}
-      try{await db().prepare("UPDATE listings SET price_after=?,price_until=?,usual_price=?,offer_text=?,price=?,mrp=?,product_key=?,photo_id=?,container=?,volume_ml=?,size=?,available=?,updated_at=? WHERE id=? AND seller_id=?").bind(pricing.price_after,pricing.price_until,pricing.usual_price,pricing.offer_text,price,mrp,key,photoId,variant.container,variant.volumeMl,variant.size,b.available?1:0,Date.now(),itemId,user.id).run();}
+      const status=own.moderation_status==="rejected"?"rejected":"approved";
+      try{await db().prepare("UPDATE listings SET moderation_status=?,price_after=?,price_until=?,usual_price=?,offer_text=?,price=?,mrp=?,product_key=?,photo_id=?,container=?,volume_ml=?,size=?,available=?,updated_at=? WHERE id=? AND seller_id=?").bind(status,pricing.price_after,pricing.price_until,pricing.usual_price,pricing.offer_text,price,mrp,key,photoId,variant.container,variant.volumeMl,variant.size,b.available?1:0,Date.now(),itemId,user.id).run();}
       catch(e){if(String(e).includes("UNIQUE"))fail(409,"You already have this snack at that MRP. Edit that listing instead.");throw e;}
     }
     return json({ok:true});
@@ -239,12 +248,13 @@ async function handle(req:Request) {
     return json({ok:true});
   }
   if(path==="admin/photos"&&req.method==="GET") {
-    await admin(req);return json({products:await photos().directory()});
+    await admin(req);return json({products:await photos().directory(true)});
   }
   if(path==="admin/products"&&req.method==="POST") {
     await admin(req);const b=await body(req),name=str(b.name,70),category=str(b.category,40);
     if(name.length<2||!CATEGORIES.slice(1).includes(category))fail(400,"Enter a product name, flavour and category.");
-    await photos().register(name,category);return json({ok:true});
+    try{asciiText(b.name,"Product name",70);checkContent(name);}catch(e){fail(400,(e as Error).message);}
+    await photos().register(name,category,"approved");return json({ok:true});
   }
   if(path==="admin/photos"&&req.method==="PUT") {
     const user=await admin(req),b=await body(req),name=str(b.name,70),category=str(b.category,40),id=str(b.photoId,100);
@@ -280,7 +290,7 @@ async function route(req:Request) {
     // Drain bounded request bodies before authorization can return early. This
     // also avoids leaving an unread stream on a reused Worker connection.
     if(req.method!=="GET"&&req.method!=="HEAD") {
-      const upload=new URL(req.url).pathname==="/api/photos/upload",limit=upload?MAX_PHOTO_BYTES:16000;
+      const upload=new URL(req.url).pathname.match(/^\/api\/(photos\/upload|market\/upload)$/),limit=upload?MAX_PHOTO_BYTES:16000;
       if(Number(req.headers.get("content-length")||0)>limit)fail(413,"Request is too large.");
       const reader=req.body?.getReader();const chunks:Uint8Array[]=[];let size=0;
       if(reader)while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>limit){await reader.cancel();fail(413,"Request is too large.");}chunks.push(value);}
@@ -290,6 +300,7 @@ async function route(req:Request) {
     return await handle(req);
   }catch(e){
     if(e instanceof ApiError)return json({error:e.message},e.status);
+    if([413,507].includes((e as any)?.status))return json({error:(e as Error).message},(e as any).status);
     console.error("StashBox API error",e instanceof Error?e.message:"Unknown error");
     return json({error:"StashBox couldn’t complete that request. Please try again shortly."},500);
   }finally{requestBodies.delete(req);requestImages.delete(req);}

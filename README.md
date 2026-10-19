@@ -85,3 +85,33 @@ Backend: the additive 0005 migration stores price_after, price_until, usual_pric
 Frontend: app/pricing-ui.tsx contains the optional fields and buyer-facing offer details. app/readability.css loads after the existing styles to raise body text, navigation, form inputs, card titles and metadata consistently across desktop and mobile. Keep overrides there when adjusting text sizes. The hero artwork is unchanged.
 
 Checks: node tests/pricing.mjs covers the exact cutoff, IST midnight and validation. node tests/integration.mjs exercises real local API/database writes, persistence, expiry and ownership. node tests/pricing-browser.mjs checks live price changes, form submission, larger text and mobile fit.
+
+## The Pawn Shop and payment QR
+
+The app switch near the top of StashBox opens The Pawn Shop as its own dark campus exchange. Its sidebar has Shop floor, Your listings, Sell an item, Payment QR and Shop rules, plus Back to StashBox. The shop has its own branding and footer. The URL remembers the selected app and shop section; returning to StashBox restores the selected hostel. The shop is universal across hostels, with no categories or hostel chooser. Each item shows its seller's hostel, wing and room. Sellers can mark an item sold, relist or remove it. Entries expire from public browsing 30 days after their last update.
+
+The theme uses dusty green, charcoal, subtle texture, serif lettering and beige highlights. app/community.css contains it. app/dialog.tsx owns the wider dialogs with fixed headers and separately scrolling bodies; photos and timed pricing are optional expandable sections.
+
+In My stash or Pawn Shop → Payment QR, a seller can optionally upload their own UPI QR. Buyers expand it beside the price in snack comparisons or item details. QR uploads are separate from the universal product-photo cache. Check the recipient in your UPI app before paying. The app does not collect money or create orders. Removing or replacing a QR stops the old image URL from being public.
+
+## Automatic moderation and maintainer activity
+
+There is no required approval queue, external API key or paid service. app/moderation.ts contains the local English/Hinglish wordlist, Indian tobacco aliases such as chhoti gold and Gold Flake, ASCII allowlist, number substitution and spacing/punctuation normalization. The server checks snack names, offer notes, Pawn Shop titles/descriptions and public profile fields. Valid entries publish immediately; prohibited text is rejected. Tests include the exact tobacco names that previously slipped through. Public fields accept ASCII letters, numbers, spaces and simple punctuation. Passwords are not constrained to ASCII, and curated product labels retain their supplied spelling.
+
+A wordlist cannot guarantee detection of new slang or deceptive descriptions, and does not inspect photo contents. Uploads are checked for allowed image format and size. No image-content classifier or external AI moderation service is active. Extend the terms in app/moderation.ts when needed and add examples to tests/moderation.mjs. Prescription/controlled medicines and loose tablets are blocked; sellers must attest that medicine items are sealed and non-prescription.
+
+The maintainer's Marketplace activity dashboard shows recent products and listings, missing images, user photos, Pawn Shop items and payment QRs. Choose photo jumps to that product in the photo manager. Hide/remove and restore controls handle exceptions; they do not require routine review. Moderator actions are audited. Removed entries stay hidden when a seller toggles availability. The help section covers listings, photos, payment QR, accounts and other issues. The contact location is Patel Bhawan, Wing 9, Room 224. Timing copy says “after in-time” instead of assuming every hostel closes at 9 PM.
+
+Frontend: app/community-ui.tsx contains shop pages, QR setup/expansion and activity monitoring; app/pawn-sidebar.tsx contains the app switch and shop navigation. Backend: app/server/community.ts handles durable listings/media, ownership, privacy and moderator actions. Migration 0006 adds the tables and review fields while preserving existing students and stock. Normal writes explicitly publish after text validation; the conservative database default does not create a user review queue.
+
+Run node tests/moderation.mjs for the wordlist and ASCII checks, node tests/community.mjs for publishing, ownership and QR privacy, and node tests/community-browser.mjs for the complete desktop/mobile flows and app switching. The website remains local-only.
+
+## Small uploads and a bounded photo budget
+
+Every new user upload uses app/image-upload.ts, including snacks, Pawn Shop item photos, maintainer uploads and payment QRs. Users can choose JPG, PNG, WebP or AVIF sources up to 30 MB. Stage one resizes large images. Stage two encodes WebP and adjusts quality/size until the result fits. The usual photo target is 120 KB; QR codes use higher quality and a 180 KB target to preserve edges. Every saved upload has a hard 200 KB maximum. The server checks the WebP file signature and size, so direct API requests cannot bypass the conversion requirement. Existing prepared library assets remain unchanged.
+
+app/server/image-storage.ts reserves actual upload bytes atomically in image_storage before saving to R2. The shared upload budget is 250 MB, preventing concurrent uploads from exceeding it. A full budget blocks further images while still allowing text-only listings. Old uploads receive conservative byte reservations during migration 0007. Replacing/removing a QR and deleting an item's last photo reference free their stored objects and reservations. Abandoned uploads older than 24 hours are cleaned up in bounded batches during later uploads. The maintainer dashboard shows usage. Shared product photos are retained for reuse.
+
+node tests/image-upload-browser.mjs checks a photo larger than the former 12 MB limit, output WebP type, resizing, hard size limits and QR handling. node tests/image-storage.mjs checks concurrent quota reservations. Browser flows also verify PNG inputs are stored and served as WebP.
+
+The chess-pawn logo is an original vector in public/pawn-shop-mark.svg, with the inline React version in app/pawn-mark.tsx. It is used in the shop sidebar, app switch and shop header. The Back to StashBox button uses a prominent beige fill.
