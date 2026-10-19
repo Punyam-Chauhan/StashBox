@@ -8,6 +8,7 @@ import "./seller.css";
 import "./ui-polish.css";
 import "./support.css";
 import "./moderator.css";
+import "./mobile-refinements.css";
 
 export const metadata: Metadata = {
   title: "StashBox — Your hostel’s midnight menu",

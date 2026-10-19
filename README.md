@@ -150,3 +150,7 @@ app/server/image-storage.ts reserves actual upload bytes atomically in image_sto
 node tests/image-upload-browser.mjs checks a photo larger than the former 12 MB limit, output WebP type, resizing, hard size limits and QR handling. node tests/image-storage.mjs checks concurrent quota reservations. Browser flows also verify PNG inputs are stored and served as WebP.
 
 The chess-pawn logo is an original vector in public/pawn-shop-mark.svg, with the inline React version in app/pawn-mark.tsx. It is used in the shop sidebar, app switch and shop header. The Back to StashBox button uses a prominent beige fill.
+
+## Phone layout and shop controls
+
+`app/header-navigation.tsx` supplies the mobile header menu; the desktop hostel control still opens the chooser. `app/mobile-refinements.css` defines the shared offer-card hierarchy, QR/call pills, viewport drawer and compact stock status. The drawer resets to its top when opened and makes background navigation inert when closed. Comparison QR codes open a nested dialog, leaving the comparison and its scroll position in place. A single Review stock action refreshes freshness; the header alone owns the shop shutter. Pawn browsing opens with a minimal shop masthead. `node tests/mobile-refinements.mjs` checks these flows without changing real user data.

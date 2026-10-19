@@ -40,3 +40,12 @@ Tests check the behaviors listed above; they do not establish that every possibl
 - Deploy The Pawn contains adding items, payment QR, contact/location details and existing item controls. Its moderator is separate from StashBox; its header has no snack shutter.
 - Login/change-password recovery explains identity verification, supplied room/WhatsApp contact and temporary passwords. Existing passwords remain inaccessible to moderators.
 - Duplicate snack selling callout and footer credit link removed. Original bottom hero artwork/CTA retained with rescue caption.
+
+## Phone UI refinements
+
+- Comparison uses readable room/name/location rows and separate price/actions, with cream, orange and blue-green accents. QR opens from a compact pill before Call; its nested dialog preserves comparison scrolling.
+- Mobile header quick navigation replaces the hostel-only dropdown. Desktop retains its hostel chooser. The duplicate heading-level hostel button is removed.
+- Mobile drawer covers the viewport, locks page scrolling, resets its scroll position and keeps its brand/close control visible. Closed mobile navigation is inert and hidden from assistive navigation.
+- Stock review has one panel/action; shop opening/closing is controlled only from the header. Shutter menus and reopen dialogs are compact.
+- Only one divider remains before the bottom hero. Pawn Shop masthead keeps the shop name and listing action without promotional subtitles.
+- Checked with `tests/mobile-refinements.mjs` at 320, 360, 390 and 540 px, plus grouped cards, Stasher dashboard and hostel/support navigation regressions.

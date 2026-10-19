@@ -42,7 +42,7 @@ try{
  await page.setViewportSize({width:390,height:844});
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Mandakini directory fits mobile');
  await page.screenshot({path:'outputs/mandakini-mobile.png',fullPage:true});
- await page.getByRole('button',{name:'Change hostel',exact:true}).click();
+ await page.getByLabel('Quick navigation',{exact:true}).click();await page.getByRole('navigation',{name:'Quick navigation links'}).getByRole('button',{name:'Choose hostel',exact:true}).click();
  await page.getByRole('button',{name:/Tagore Bhawan/}).click();
  await page.getByRole('heading',{name:'Tagore Bhawan',exact:true}).waitFor();
  await page.locator('.product-card').first().waitFor();
