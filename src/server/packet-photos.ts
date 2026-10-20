@@ -1,3 +1,4 @@
+import type { ImageBucket } from "./object-store";
 import {
   PACKET_LIBRARY,
   libraryPhoto,
@@ -53,7 +54,7 @@ export function imageType(bytes: Uint8Array): string | null {
     return "image/webp";
   return null;
 }
-export function photoService(db: D1Database, bucket: R2Bucket) {
+export function photoService(db: D1Database, bucket: ImageBucket) {
   async function photo(
     id: string,
     includePending = false,

@@ -1,3 +1,4 @@
+import { imageBucket } from "./object-store";
 import { withContentPolicy } from "./content-policy";
 import {
   readSiteSettings,
@@ -34,12 +35,13 @@ const encoder = new TextEncoder();
 const requestBodies = new WeakMap<Request, string>();
 const requestImages = new WeakMap<Request, Uint8Array>();
 function photos() {
-  if (!env.BUCKET)
+  const bucket = imageBucket(env);
+  if (!bucket)
     fail(
       503,
       "Photo storage is unavailable. You can still save your snack without a photo.",
     );
-  return photoService(db(), env.BUCKET);
+  return photoService(db(), bucket);
 }
 function validMrp(value: unknown): number {
   if (
@@ -376,7 +378,7 @@ async function handle(req: Request) {
     try {
       const result = await community(req, path, {
         db: db(),
-        bucket: env.BUCKET!,
+        bucket: imageBucket(env)!,
         user: await currentUser(req, false),
         bytes: requestImages.get(req),
         body: () => body(req),
@@ -476,8 +478,9 @@ async function handle(req: Request) {
       if (viewer?.id !== row.uploaded_by && viewer?.role !== "admin")
         fail(404, "Photo not found.");
     }
-    if (!row || !env.BUCKET) fail(404, "Photo not found.");
-    const object = await env.BUCKET.get(row.object_key);
+    const bucket = imageBucket(env);
+    if (!row || !bucket) fail(404, "Photo not found.");
+    const object = await bucket.get(row.object_key);
     if (!object) fail(404, "Photo not found.");
     return new Response(object.body, {
       headers: {

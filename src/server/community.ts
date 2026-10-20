@@ -1,3 +1,4 @@
+import type { ImageBucket } from "./object-store";
 import { asciiText, checkContent, prohibitedReason } from "./content-policy";
 import { registeredHostel } from "./hostels";
 import {
@@ -10,7 +11,7 @@ import { maintainerConsole } from "./maintainer-console";
 import { imageType, MAX_PHOTO_BYTES } from "./packet-photos";
 type Context = {
   db: D1Database;
-  bucket: R2Bucket;
+  bucket: ImageBucket;
   user: any;
   bytes?: Uint8Array;
   body: () => Promise<any>;

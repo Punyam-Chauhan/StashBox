@@ -1,3 +1,4 @@
+import type { ImageBucket } from "./object-store";
 export const MAX_IMAGE_BYTES = 200000;
 export const MAX_STORAGE_BYTES = 250 * 1024 * 1024;
 export async function reservePhoto(
@@ -31,7 +32,7 @@ export async function releasePhoto(db: D1Database, id: string) {
 }
 export async function deleteMarketMedia(
   db: D1Database,
-  bucket: R2Bucket,
+  bucket: ImageBucket,
   id: string,
 ) {
   const media = await db
@@ -45,7 +46,7 @@ export async function deleteMarketMedia(
     db.prepare("DELETE FROM image_storage WHERE id=?").bind(id),
   ]);
 }
-export async function pruneUnusedImages(db: D1Database, bucket: R2Bucket) {
+export async function pruneUnusedImages(db: D1Database, bucket: ImageBucket) {
   const cutoff = Date.now() - 86400000;
   const stale = (
     await db

@@ -1,0 +1,8 @@
+{
+  "workerName": "stashbox",
+  "accountId": "f4e628940be7c9b94e57d947ff42d866",
+  "databaseName": "stashbox-db",
+  "databaseId": "22000ccd-801c-455a-9c3e-bee4cd6510ec",
+  "supabaseUrl": "https://bdhimtjjralinbtewibv.supabase.co",
+  "supabaseBucket": "stashbox-media"
+}

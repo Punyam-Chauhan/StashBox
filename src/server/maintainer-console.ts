@@ -1,3 +1,4 @@
+import type { ImageBucket } from "./object-store";
 import { checkContent } from "./content-policy";
 import { libraryPhoto, photoGroup } from "../domain/packet-library";
 import {
@@ -9,7 +10,7 @@ import {
 import { photoService } from "./packet-photos";
 type Context = {
   db: D1Database;
-  bucket: R2Bucket;
+  bucket: ImageBucket;
   user: any;
   body: () => Promise<any>;
 };
