@@ -117,6 +117,15 @@ try {
   check(
     (
       await call("login", "POST", {
+        identifier: "' OR 1=1 --",
+        password: "wrong",
+      })
+    ).status === 401,
+    "SQL injection cannot bypass login",
+  );
+  check(
+    (
+      await call("login", "POST", {
         identifier: `${run}a`,
         password: "Test-password-482!",
       })
@@ -461,6 +470,14 @@ try {
       })
     ).status === 403,
     "Cross-origin writes rejected",
+  );
+  check(
+    (
+      await call("confirm", "POST", {}, a.cookie, {
+        "Sec-Fetch-Site": "cross-site",
+      })
+    ).status === 403,
+    "Cross-site writes without an Origin header are rejected",
   );
   check(
     (await call("listings")).status === 400,

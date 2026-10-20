@@ -1,17 +1,7 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import ts from "typescript";
-const code = ts.transpileModule(
-  fs.readFileSync("src/domain/bookkeeping.ts", "utf8"),
-  {
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ESNext,
-    },
-  },
-).outputText;
-const { calculateBook, demandSuggestions } = await import(
-  "data:text/javascript;base64," + Buffer.from(code).toString("base64")
+import { importTypeScript } from "./helpers/import-typescript.mjs";
+const { calculateBook, demandSuggestions } = await importTypeScript(
+  "src/domain/bookkeeping.ts",
 );
 let n = 0;
 const row = (kind, quantity, price, date) => ({

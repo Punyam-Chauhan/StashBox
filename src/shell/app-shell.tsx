@@ -99,8 +99,9 @@ export default function Home({
     ),
     [modal, setModal] = useState(""),
     [authTab, setAuthTab] = useState("login"),
-    [demo, setDemo] = useState(false),
+    [demoRequested, setDemo] = useState(false),
     [demoData, setDemoData] = useState<Listing[]>([]);
+  const demo = !!site?.demoEnabled && demoRequested;
   const [query, setQuery] = useState(""),
     [category, setCategory] = useState(CATEGORIES[0]),
     [wing, setWing] = useState("all"),
@@ -219,7 +220,6 @@ export default function Home({
       setPawnSection(pawn);
       history.replaceState(null, "", pawnUrl(pawn));
     }
-    if (params.get("demo") === "1") setDemo(true);
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
@@ -243,6 +243,15 @@ export default function Home({
   useEffect(() => {
     if (demo && hostel) setDemoData(demoListings(hostel));
   }, [demo, hostel]);
+  useEffect(() => {
+    if (!site?.demoEnabled) {
+      setDemo(false);
+      setDemoData([]);
+      if (demoRequested) setSelected(null);
+    } else if (new URLSearchParams(location.search).get("demo") === "1") {
+      setDemo(true);
+    }
+  }, [site?.demoEnabled]);
   useEffect(() => {
     const update = () =>
       api("site")
@@ -361,6 +370,7 @@ export default function Home({
     }
   }
   function startDemo() {
+    if (!site?.demoEnabled) return;
     setDemo(true);
     setView("browse");
   }
@@ -718,12 +728,16 @@ export default function Home({
                 <HostelLanding
                   selectedHostel={rememberedHostel}
                   onChoose={chooseHostel}
-                  onDemo={() => {
-                    setDemo(true);
-                    document
-                      .getElementById("hostel-choices")
-                      ?.scrollIntoView({ behavior: "smooth" });
-                  }}
+                  onDemo={
+                    site?.demoEnabled
+                      ? () => {
+                          setDemo(true);
+                          document
+                            .getElementById("hostel-choices")
+                            ?.scrollIntoView({ behavior: "smooth" });
+                        }
+                      : undefined
+                  }
                 />
               )}
               {view === "browse" && hostel && (
@@ -1018,7 +1032,7 @@ export default function Home({
                               : "List your first snack"}
                             <ArrowUpRight size={16} />
                           </button>
-                          {!source.length && !demo && (
+                          {!source.length && !demo && site?.demoEnabled && (
                             <button
                               className="button ghost"
                               onClick={startDemo}

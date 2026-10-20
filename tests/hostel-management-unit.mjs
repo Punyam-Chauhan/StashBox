@@ -1,15 +1,10 @@
 import { importTypeScript } from "./helpers/import-typescript.mjs";
 import assert from "node:assert/strict";
-import { Miniflare } from "miniflare";
+import { createTestRuntime } from "./helpers/runtime.mjs";
 const { manageHostels } = await importTypeScript(
   "src/server/hostel-management.ts",
 );
-const mf = new Miniflare({
-  modules: true,
-  script: 'export default {fetch(){return new Response("test")}}',
-  d1Databases: ["DB"],
-  compatibilityDate: "2026-05-15",
-});
+const mf = createTestRuntime();
 try {
   const db = await mf.getD1Database("DB");
   for (const sql of [

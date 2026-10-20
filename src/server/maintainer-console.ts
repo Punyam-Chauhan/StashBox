@@ -121,7 +121,7 @@ export async function maintainerConsole(
     qr: ["market_media", "status", "id"],
   };
   if (
-    !config[b.kind] ||
+    !Object.hasOwn(config, b.kind) ||
     typeof b.id !== "string" ||
     (pawnOnly && !["pawn", "qr"].includes(b.kind)) ||
     (stashOnly && b.kind === "pawn")

@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import ts from "typescript";
-const source = ts.transpileModule(
-  fs.readFileSync("src/domain/moderation.ts", "utf8"),
-  { compilerOptions: { module: ts.ModuleKind.ESNext } },
-).outputText;
-const { asciiText, checkContent, prohibitedReason } = await import(
-  "data:text/javascript;base64," + Buffer.from(source).toString("base64")
+import { importTypeScript } from "./helpers/import-typescript.mjs";
+const { asciiText, checkContent, prohibitedReason } = await importTypeScript(
+  "src/domain/moderation.ts",
 );
 for (const text of [
   "chhoti gold",

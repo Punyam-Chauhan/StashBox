@@ -71,6 +71,11 @@ try {
   ids.push(actorId);
   sql(`UPDATE users SET role='admin' WHERE id='${actorId}'`);
   original = (await data(admin, "admin/site")).data.settings;
+  await save("availability", {
+    ...original,
+    pawnEnabled: true,
+    demoEnabled: false,
+  });
   assert.equal((await data(guest, "admin/site")).status, 401);
   assert.equal((await data(guest, "admin/activity")).status, 401);
   await page.goto(base + "/maintainer");
@@ -132,6 +137,24 @@ try {
     .getByRole("button", { name: "All maintainer tools", exact: true })
     .click();
   await page.getByRole("button", { name: /Site controls/ }).click();
+  await visitor.goto(base + "/?hostel=patel&demo=1");
+  await visitor.getByPlaceholder(/What are you craving/).waitFor();
+  assert.equal(await visitor.locator(".demo-banner").count(), 0);
+  await page.getByRole("checkbox", { name: /Demo listings button/ }).check();
+  await page
+    .getByRole("button", { name: "Save availability", exact: true })
+    .click();
+  await page.getByRole("status").filter({ hasText: "Saved." }).waitFor();
+  await visitor.reload();
+  await visitor.locator(".demo-banner").waitFor();
+  await page.getByRole("checkbox", { name: /Demo listings button/ }).uncheck();
+  await page
+    .getByRole("button", { name: "Save availability", exact: true })
+    .click();
+  await page.getByRole("status").filter({ hasText: "Saved." }).waitFor();
+  await visitor.reload();
+  await visitor.getByPlaceholder(/What are you craving/).waitFor();
+  assert.equal(await visitor.locator(".demo-banner").count(), 0);
   await page
     .getByLabel("Announcement", { exact: true })
     .fill("QA campus notice");
@@ -225,6 +248,7 @@ try {
     pawnEnabled: true,
     signupEnabled: false,
     uploadsEnabled: false,
+    demoEnabled: false,
   });
   assert.equal((await data(guest, "signup", "POST", {})).status, 403);
   assert.equal(

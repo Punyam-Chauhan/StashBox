@@ -63,7 +63,16 @@ async function signup(suffix, hostel) {
   return r;
 }
 const bytes = new Uint8Array(
-  readFileSync(new URL("./fixtures/test-pixel.webp", import.meta.url)),
+  readFileSync(
+    new URL(
+      "../public/packets/kurkure-masala-40g-supplied.webp",
+      import.meta.url,
+    ),
+  ),
+);
+assert(
+  bytes.length > 16000 && bytes.length <= 200000,
+  "Exercise real WebP uploads above the JSON body limit",
 );
 async function image(kind, cookie) {
   const r = await fetch(base + "/api/market/upload?kind=" + kind, {

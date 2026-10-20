@@ -89,6 +89,7 @@ export function MaintainerControls({
       pawnEnabled: settings!.pawnEnabled,
       signupEnabled: settings!.signupEnabled,
       uploadsEnabled: settings!.uploadsEnabled,
+      demoEnabled: settings!.demoEnabled,
     });
   async function importFile(
     file: File | undefined,
@@ -205,6 +206,11 @@ export function MaintainerControls({
                   "signupEnabled",
                   "New accounts",
                   "Allow students to register. Existing accounts can always log in.",
+                ],
+                [
+                  "demoEnabled",
+                  "Demo listings button",
+                  "Let visitors explore clearly labelled fictional listings. Off by default; real listings are unaffected.",
                 ],
                 [
                   "uploadsEnabled",

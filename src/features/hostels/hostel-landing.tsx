@@ -230,7 +230,7 @@ export function HostelLanding({
 }: {
   selectedHostel: string;
   onChoose: (id: string) => void;
-  onDemo: () => void;
+  onDemo?: () => void;
 }) {
   return (
     <div className="hostel-landing">
@@ -304,11 +304,13 @@ export function HostelLanding({
             their own room and wing, so every bhawan fits.
           </p>
         </div>
-        <button className="demo-link" onClick={onDemo}>
-          <Sparkles size={15} />
-          Just looking around? Try demo listings after choosing a hostel
-          <ArrowRight size={15} />
-        </button>
+        {onDemo && (
+          <button className="demo-link" onClick={onDemo}>
+            <Sparkles size={15} />
+            Just looking around? Try demo listings after choosing a hostel
+            <ArrowRight size={15} />
+          </button>
+        )}
       </section>
     </div>
   );

@@ -45,6 +45,7 @@ export async function siteControls(
         "pawnEnabled",
         "signupEnabled",
         "uploadsEnabled",
+        "demoEnabled",
       ] as const) {
         if (typeof b[key] !== "boolean")
           throw Error("Choose an option for every availability control.");

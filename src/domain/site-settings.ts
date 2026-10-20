@@ -3,6 +3,7 @@ export type SiteSettings = {
   pawnEnabled: boolean;
   signupEnabled: boolean;
   uploadsEnabled: boolean;
+  demoEnabled: boolean;
   maintenanceUntil: number;
   maintenanceMessage: string;
   announcement: string;
@@ -13,6 +14,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   pawnEnabled: true,
   signupEnabled: true,
   uploadsEnabled: true,
+  demoEnabled: false,
   maintenanceUntil: 0,
   maintenanceMessage:
     "We’re making a few improvements. Please come back shortly.",

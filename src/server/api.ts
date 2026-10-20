@@ -1,4 +1,6 @@
 import { imageBucket } from "./object-store";
+import { ValidationError } from "../domain/validation-error";
+import { crossSiteWrite, requestBodyLimit } from "./request-security";
 import { withContentPolicy } from "./content-policy";
 import {
   readSiteSettings,
@@ -265,20 +267,6 @@ async function body(req: Request) {
 async function handle(req: Request) {
   const url = new URL(req.url),
     path = url.pathname.replace(/^\/api\//, "");
-  if (req.method !== "GET") {
-    const origin = req.headers.get("origin");
-    if (origin && origin !== url.origin)
-      fail(403, "Please use StashBox directly.");
-    if (
-      Number(req.headers.get("content-length") || 0) >
-      (path === "photos/upload"
-        ? MAX_PHOTO_BYTES
-        : path === "admin/site"
-          ? 24000
-          : 16000)
-    )
-      fail(413, "Request is too large.");
-  }
   if (path === "admin/site") {
     const actor = await admin(req);
     if (req.method !== "GET") await rate(req, "site-controls", 60);
@@ -294,12 +282,8 @@ async function handle(req: Request) {
   ) {
     const actor = await admin(req);
     if (req.method !== "GET") await rate(req, "hostel-manage", 60);
-    try {
-      return await manageHostels(req, path, db(), actor, () => body(req));
-    } catch (e) {
-      if (e instanceof ApiError) throw e;
-      fail(400, (e as Error).message);
-    }
+
+    return await manageHostels(req, path, db(), actor, () => body(req));
   }
   if (path === "admin/hostels" && req.method === "POST") {
     const actor = await admin(req);
@@ -356,18 +340,13 @@ async function handle(req: Request) {
     return json({ ok: true, id });
   }
   if (path.startsWith("seller/")) {
-    try {
-      if (req.method !== "GET") await rate(req, "seller-dashboard", 180);
-      const result = await sellerDashboard(req, path, {
-        db: db(),
-        user: await currentUser(req, false),
-        body: () => body(req),
-      });
-      if (result) return result;
-    } catch (e) {
-      if (e instanceof ApiError) throw e;
-      fail(400, (e as Error).message);
-    }
+    if (req.method !== "GET") await rate(req, "seller-dashboard", 180);
+    const result = await sellerDashboard(req, path, {
+      db: db(),
+      user: await currentUser(req, false),
+      body: () => body(req),
+    });
+    if (result) return result;
   }
   if (
     path.startsWith("pawn") ||
@@ -375,19 +354,15 @@ async function handle(req: Request) {
     path === "payment-qr" ||
     path === "admin/review"
   ) {
-    try {
-      const result = await community(req, path, {
-        db: db(),
-        bucket: imageBucket(env)!,
-        user: await currentUser(req, false),
-        bytes: requestImages.get(req),
-        body: () => body(req),
-        rate: () => rate(req, "community-write", 30),
-      });
-      if (result) return result;
-    } catch (e) {
-      fail((e as any).status || 400, (e as Error).message);
-    }
+    const result = await community(req, path, {
+      db: db(),
+      bucket: imageBucket(env)!,
+      user: await currentUser(req, false),
+      bytes: requestImages.get(req),
+      body: () => body(req),
+      rate: () => rate(req, "community-write", 30),
+    });
+    if (result) return result;
   }
   if (path === "photos/library" && req.method === "GET") {
     const name = str(url.searchParams.get("name"), 70),
@@ -802,11 +777,7 @@ async function handle(req: Request) {
       );
     let photoId: string | null = null;
     if (b.photoId) {
-      try {
-        photoId = await photos().allowed(b.photoId, user.id, name, category);
-      } catch (e) {
-        fail(400, (e as Error).message);
-      }
+      photoId = await photos().allowed(b.photoId, user.id, name, category);
     }
     const count = await db()
       .prepare("SELECT COUNT(*) AS n FROM listings WHERE seller_id=?")
@@ -896,13 +867,9 @@ async function handle(req: Request) {
           : own.product_key;
       let photoId = own.photo_id;
       if (b.photoId !== undefined) {
-        try {
-          photoId = b.photoId
-            ? await photos().allowed(b.photoId, user.id, own.name, own.category)
-            : "none";
-        } catch (e) {
-          fail(400, (e as Error).message);
-        }
+        photoId = b.photoId
+          ? await photos().allowed(b.photoId, user.id, own.name, own.category)
+          : "none";
       }
       const status =
         own.moderation_status === "rejected" ? "rejected" : "approved";
@@ -1165,11 +1132,8 @@ async function handle(req: Request) {
       id = str(b.photoId, 100);
     if (name.length < 2 || !CATEGORIES.slice(1).includes(category) || !id)
       fail(400, "Choose a product and photo.");
-    try {
-      await photos().selectDefault(name, category, id, user.id);
-    } catch (e) {
-      fail(400, (e as Error).message);
-    }
+
+    await photos().selectDefault(name, category, id, user.id);
     return json({ ok: true });
   }
   if (path === "admin/users" && req.method === "GET") {
@@ -1221,19 +1185,17 @@ async function handle(req: Request) {
 }
 async function route(req: Request) {
   try {
+    if (crossSiteWrite(req)) {
+      await req.body?.cancel();
+      fail(403, "Please use StashBox directly.");
+    }
     // Drain bounded request bodies before authorization can return early. This
     // also avoids leaving an unread stream on a reused Worker connection.
     if (req.method !== "GET" && req.method !== "HEAD") {
       const upload = new URL(req.url).pathname.match(
           /^\/api\/(photos\/upload|market\/upload)$/,
         ),
-        limit = upload
-          ? MAX_PHOTO_BYTES
-          : new URL(req.url).pathname === "/api/admin/site"
-            ? 24000
-            : 16000;
-      if (Number(req.headers.get("content-length") || 0) > limit)
-        fail(413, "Request is too large.");
+        limit = requestBodyLimit(new URL(req.url).pathname);
       const reader = req.body?.getReader();
       const chunks: Uint8Array[] = [];
       let size = 0;
@@ -1314,7 +1276,8 @@ async function route(req: Request) {
     return await withContentPolicy(settings.blockedWords, () => handle(req));
   } catch (e) {
     if (e instanceof ApiError) return json({ error: e.message }, e.status);
-    if ([409, 413, 507].includes((e as any)?.status))
+    if (e instanceof ValidationError) return json({ error: e.message }, 400);
+    if ([401, 403, 409, 413, 503, 507].includes((e as any)?.status))
       return json({ error: (e as Error).message }, (e as any).status);
     console.error(
       "StashBox API error",

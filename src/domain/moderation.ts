@@ -1,3 +1,4 @@
+import { ValidationError } from "./validation-error";
 export const ASCII_HINT =
   "Use English letters, numbers, spaces and simple punctuation (. , ! ? & ' ( ) + : ; / @ # % = -).";
 export function asciiText(
@@ -6,16 +7,18 @@ export function asciiText(
   max: number,
   required = true,
 ) {
-  if (typeof value !== "string") throw new Error(`Enter ${label}.`);
+  if (typeof value !== "string") throw new ValidationError(`Enter ${label}.`);
   if (/[^\x20-\x7E\r\n\t]/.test(value))
-    throw new Error(`${label}: ${ASCII_HINT}`);
+    throw new ValidationError(`${label}: ${ASCII_HINT}`);
   const text = value.trim().replace(/\s+/g, " ");
   if (
     (required && !text) ||
     text.length > max ||
     !/^[A-Za-z0-9 .,!?&'()+:;/@#%=\-]*$/.test(text)
   )
-    throw new Error(`${label}: ${ASCII_HINT} Maximum ${max} characters.`);
+    throw new ValidationError(
+      `${label}: ${ASCII_HINT} Maximum ${max} characters.`,
+    );
   return text;
 }
 export function prohibitedReason(value: string) {
@@ -206,7 +209,7 @@ export function prohibitedReason(value: string) {
 }
 export function checkContent(...values: string[]) {
   const reason = prohibitedReason(values.join(" "));
-  if (reason) throw new Error(reason);
+  if (reason) throw new ValidationError(reason);
 }
 export function asciiDisplay(value: string) {
   return value

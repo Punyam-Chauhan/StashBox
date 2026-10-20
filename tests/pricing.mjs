@@ -1,25 +1,7 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import ts from "typescript";
-const moderation = ts.transpileModule(
-  fs.readFileSync("src/domain/moderation.ts", "utf8"),
-  { compilerOptions: { module: ts.ModuleKind.ESNext } },
-).outputText;
-const source = ts
-  .transpileModule(fs.readFileSync("src/domain/pricing.ts", "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.ESNext },
-  })
-  .outputText.replace(
-    '"./moderation"',
-    JSON.stringify(
-      "data:text/javascript;base64," +
-        Buffer.from(moderation).toString("base64"),
-    ),
-  );
+import { importTypeScript } from "./helpers/import-typescript.mjs";
 const { currentPrice, activeOffer, validatePricing, istInput, parseIST } =
-  await import(
-    "data:text/javascript;base64," + Buffer.from(source).toString("base64")
-  );
+  await importTypeScript("src/domain/pricing.ts");
 const now = Date.now(),
   until = now + 10000,
   item = {

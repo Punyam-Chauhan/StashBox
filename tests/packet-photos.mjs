@@ -1,43 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
-import ts from "typescript";
-import { Miniflare } from "miniflare";
-const transpile = (s) =>
-  ts.transpileModule(s, {
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ES2022,
-    },
-  }).outputText;
-const libraryCode = transpile(
-  readFileSync("src/domain/packet-library.ts", "utf8"),
-).replace(
-  'import entries from "./packet-library.json";',
-  `const entries=${readFileSync("src/domain/packet-library.json", "utf8")};`,
-);
-const libraryURL = `data:text/javascript;base64,${Buffer.from(libraryCode).toString("base64")}`;
-const storageCode = transpile(
-  readFileSync("src/server/image-storage.ts", "utf8"),
-);
-const source = transpile(readFileSync("src/server/packet-photos.ts", "utf8"))
-  .replace('"../domain/packet-library"', JSON.stringify(libraryURL))
-  .replace(
-    '"./image-storage"',
-    JSON.stringify(
-      "data:text/javascript;base64," +
-        Buffer.from(storageCode).toString("base64"),
-    ),
-  );
-const { photoService, productKey, imageType, MAX_PHOTO_BYTES } = await import(
-  `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
-);
-const mf = new Miniflare({
-  modules: true,
-  script: 'export default {fetch(){return new Response("test")}}',
-  d1Databases: ["DB"],
-  r2Buckets: ["BUCKET"],
-  compatibilityDate: "2026-05-15",
-});
+import { createTestRuntime } from "./helpers/runtime.mjs";
+import { importTypeScript } from "./helpers/import-typescript.mjs";
+const { photoService, productKey, imageType, MAX_PHOTO_BYTES } =
+  await importTypeScript("src/server/packet-photos.ts");
+const mf = createTestRuntime({ r2Buckets: ["BUCKET"] });
 let checks = 0;
 const check = (v, label) => {
   assert(v, label);

@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { ValidationError } from "../domain/validation-error";
 import { prohibitedReason as builtInReason } from "../domain/moderation";
 import { customBlockedReason } from "../domain/site-settings";
 export { asciiText, asciiDisplay } from "../domain/moderation";
@@ -13,5 +14,5 @@ export function prohibitedReason(value: string) {
 }
 export function checkContent(...values: string[]) {
   const reason = prohibitedReason(values.join(" "));
-  if (reason) throw Error(reason);
+  if (reason) throw new ValidationError(reason);
 }

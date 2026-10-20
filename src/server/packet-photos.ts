@@ -1,4 +1,5 @@
 import type { ImageBucket } from "./object-store";
+import { ValidationError } from "../domain/validation-error";
 import {
   PACKET_LIBRARY,
   libraryPhoto,
@@ -83,7 +84,7 @@ export function photoService(db: D1Database, bucket: ImageBucket) {
   ) {
     const type = imageType(bytes);
     if (type !== "image/webp" || bytes.byteLength > MAX_PHOTO_BYTES)
-      throw new Error("Use a compressed WebP photo under 200 KB.");
+      throw new ValidationError("Use a compressed WebP photo under 200 KB.");
     const id = crypto.randomUUID(),
       key = `packets/${id}`,
       category = info.category || "Sweet tooth",
@@ -200,7 +201,7 @@ export function photoService(db: D1Database, bucket: ImageBucket) {
   ) {
     if (id === null || id === undefined || id === "") return null;
     if (typeof id !== "string" || !(await photo(id, true)))
-      throw new Error("Choose a shared packet photo or upload one.");
+      throw new ValidationError("Choose a shared packet photo or upload one.");
     if (name && category) {
       const group = photoGroup(name, category),
         prepared = libraryPhoto(name);
@@ -217,12 +218,14 @@ export function photoService(db: D1Database, bucket: ImageBucket) {
         .bind(group)
         .first<{ photo_id: string }>();
       if (prepared?.photo_id !== id && !uploaded && selected?.photo_id !== id)
-        throw new Error("Choose a photo for this product and flavour.");
+        throw new ValidationError(
+          "Choose a photo for this product and flavour.",
+        );
     }
     if (name && category) {
       const selected = await choices(name, category);
       if (selected.defaultPhoto && selected.defaultPhoto.photo_id !== id)
-        throw new Error(
+        throw new ValidationError(
           "Use this product's shared default image. Only the maintainer can change it.",
         );
     }
@@ -247,7 +250,7 @@ export function photoService(db: D1Database, bucket: ImageBucket) {
       .bind(group)
       .first<{ photo_id: string }>();
     if (prepared?.photo_id !== id && !uploaded && selected?.photo_id !== id)
-      throw new Error("Choose a photo from this product’s library.");
+      throw new ValidationError("Choose a photo from this product’s library.");
     await db.batch([
       db
         .prepare("UPDATE packet_photos SET review_status='approved' WHERE id=?")

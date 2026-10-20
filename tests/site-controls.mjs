@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { Miniflare } from "miniflare";
+import { createTestRuntime } from "./helpers/runtime.mjs";
 import { readFileSync } from "node:fs";
 import { importTypeScript } from "./helpers/import-typescript.mjs";
 const { siteControls, readSiteSettings, siteActivity } = await importTypeScript(
@@ -12,7 +12,9 @@ const {
   matchesSearch,
   publicSettings,
   MAX_MAINTENANCE_MS,
+  DEFAULT_SETTINGS,
 } = await importTypeScript("src/domain/site-settings.ts");
+assert.equal(DEFAULT_SETTINGS.demoEnabled, false);
 const { withContentPolicy, checkContent } = await importTypeScript(
   "src/server/content-policy.ts",
 );
@@ -55,12 +57,7 @@ await Promise.all([
     checkContent("example");
   }),
 ]);
-const mf = new Miniflare({
-  modules: true,
-  script: 'export default {fetch(){return new Response("test")}}',
-  d1Databases: ["DB"],
-  compatibilityDate: "2026-05-15",
-});
+const mf = createTestRuntime();
 try {
   const db = await mf.getD1Database("DB");
   for (const sql of readFileSync("drizzle/0011_polite_starbolt.sql", "utf8")
@@ -147,9 +144,12 @@ try {
     pawnEnabled: false,
     signupEnabled: false,
     uploadsEnabled: false,
+    demoEnabled: true,
   });
   assert.equal(r.status, 200);
   assert.equal(r.data.settings.pawnEnabled, false);
+  assert.equal(r.data.settings.demoEnabled, true);
+  assert.equal(publicSettings(r.data.settings).demoEnabled, true);
   r = await put({
     revision: 4,
     section: "announcement",

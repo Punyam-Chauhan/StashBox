@@ -1,3 +1,4 @@
+import { ValidationError } from "./validation-error";
 export type LedgerEntry = {
   id: string;
   product_key: string;
@@ -63,7 +64,7 @@ export function calculateBook(entries: LedgerEntry[]) {
         p.lots.push({ quantity: e.quantity, cost: e.unit_price });
       } else {
         if (e.quantity > p.stock)
-          throw Error(
+          throw new ValidationError(
             `Not enough recorded stock for ${e.name} on ${e.entry_date}. Add the purchase or opening stock first.`,
           );
         let remaining = e.quantity;

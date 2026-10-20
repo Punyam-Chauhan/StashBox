@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
-import { Miniflare } from "miniflare";
+import { createTestRuntime } from "./helpers/runtime.mjs";
 const source = ts.transpileModule(
   readFileSync("src/server/image-storage.ts", "utf8"),
   { compilerOptions: { module: ts.ModuleKind.ESNext } },
@@ -9,12 +9,7 @@ const source = ts.transpileModule(
 const { reservePhoto, releasePhoto } = await import(
   "data:text/javascript;base64," + Buffer.from(source).toString("base64")
 );
-const mf = new Miniflare({
-  modules: true,
-  script: 'export default {fetch(){return new Response("test")}}',
-  d1Databases: ["DB"],
-  compatibilityDate: "2026-05-15",
-});
+const mf = createTestRuntime();
 try {
   const db = await mf.getD1Database("DB");
   await db
