@@ -12,7 +12,7 @@ If PowerShell cannot find `node`, add the bundled runtime for that terminal sess
 $env:Path = "$env:USERPROFILE\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin;$env:Path"
 ```
 
-The initial deployment address is `https://stashbox.punyam-chauhan.workers.dev`. Registering a new Workers subdomain may take a few minutes to activate DNS and HTTPS. GitHub Pages serves static sites and cannot run this app's existing backend.
+The public address is `https://stashbox.pages.dev`. A small Pages entry point forwards requests through a service binding to the existing `stashbox` Worker. The same database, secrets and private storage remain attached to that Worker. Registering a new subdomain may take a few minutes to activate DNS and HTTPS. GitHub Pages serves static sites and cannot run this app's existing backend.
 
 1. Build and prepare the production artifact:
 
@@ -59,3 +59,13 @@ The initial deployment address is `https://stashbox.punyam-chauhan.workers.dev`.
 The returned `workers.dev` URL works independently of EU.org approval. Test signup/login, listing creation, private QR/photo permissions, Maintainer activation and mobile browsing there. Confirm Free-plan CPU limits against the real deployment; local timings do not guarantee hosted limits.
 
 After EU.org approves the domain and Cloudflare marks the zone active, add `stashbox.eu.org` as the Worker's custom domain. Keep the database and bucket when publishing later code changes. Run `prepare` again after changing source; production artifacts stay in ignored `.sites-runtime/cloudflare-builds/`. No remote command runs as part of normal local startup or build.
+
+## Publish the short Pages address
+
+The `stashbox` Pages project uses `deploy/pages/wrangler.json`. To publish or update its small entry point, run:
+
+```powershell
+node scripts/deploy-pages.mjs
+```
+
+Ordinary app updates only need the Worker deployment commands above: Pages automatically calls the current production Worker. Keep that Worker running. No database migrations or copying secrets are needed for the short address. Users must log in once on the new address because cookies are scoped to each hostname.
