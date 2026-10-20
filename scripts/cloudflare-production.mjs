@@ -96,7 +96,9 @@ if (command === "prepare") {
     value = JSON.parse(readFileSync(config, "utf8"));
   value.name = target.workerName;
   value.account_id = target.accountId;
-  value.workers_dev = true;
+  // Public traffic enters through stashbox.pages.dev; Pages calls this Worker internally.
+  value.workers_dev = false;
+  value.preview_urls = false;
   value.d1_databases = [
     {
       binding: "DB",

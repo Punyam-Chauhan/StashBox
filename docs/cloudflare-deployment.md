@@ -56,7 +56,7 @@ The public address is `https://stashbox.pages.dev`. A small Pages entry point fo
    node scripts/cloudflare-production.mjs deploy
    ```
 
-The returned `workers.dev` URL works independently of EU.org approval. Test signup/login, listing creation, private QR/photo permissions, Maintainer activation and mobile browsing there. Confirm Free-plan CPU limits against the real deployment; local timings do not guarantee hosted limits.
+The Worker is internal: its `workers.dev` address and Worker preview URLs are disabled. Use `https://stashbox.pages.dev` after publishing the Pages entry point below. Test signup/login, listing creation, private QR/photo permissions, Maintainer activation and mobile browsing there. Confirm Free-plan CPU limits against the real deployment; local timings do not guarantee hosted limits.
 
 After EU.org approves the domain and Cloudflare marks the zone active, add `stashbox.eu.org` as the Worker's custom domain. Keep the database and bucket when publishing later code changes. Run `prepare` again after changing source; production artifacts stay in ignored `.sites-runtime/cloudflare-builds/`. No remote command runs as part of normal local startup or build.
 
