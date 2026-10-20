@@ -5,13 +5,15 @@ type Action = { label: string; run: () => void; Icon: typeof Store };
 export function HeaderNavigation({
   label,
   pawn = false,
+  pawnEnabled = false,
   onNavigate,
   onPawn,
 }: {
   label: string;
   pawn?: boolean;
+  pawnEnabled?: boolean;
   onNavigate: (view: string) => void;
-  onPawn: (section: "all" | "sell" | "rules" | "moderator") => void;
+  onPawn: (section: "all" | "sell" | "rules" | "maintainer") => void;
 }) {
   const { ref, toggle, close } = useDetailsMotion();
   const actions: Action[] = pawn
@@ -45,18 +47,20 @@ export function HeaderNavigation({
         <ChevronDown size={14} />
       </summary>
       <nav aria-label="Quick navigation links">
-        {actions.map(({ label, run, Icon }) => (
-          <button
-            key={label}
-            onClick={() => {
-              close(true);
-              run();
-            }}
-          >
-            <Icon size={18} />
-            {label}
-          </button>
-        ))}
+        {actions
+          .filter((action) => pawnEnabled || action.label !== "The Pawn Shop")
+          .map(({ label, run, Icon }) => (
+            <button
+              key={label}
+              onClick={() => {
+                close(true);
+                run();
+              }}
+            >
+              <Icon size={18} />
+              {label}
+            </button>
+          ))}
       </nav>
     </details>
   );

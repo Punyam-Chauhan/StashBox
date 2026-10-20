@@ -15,9 +15,9 @@ export function PawnSidebar({
   onSection,
   onBack,
   onHelp,
-  isModerator = false,
+  isMaintainer = false,
 }: {
-  isModerator?: boolean;
+  isMaintainer?: boolean;
   section: PawnSection;
   onSection: (s: PawnSection) => void;
   onBack: () => void;
@@ -60,13 +60,13 @@ export function PawnSidebar({
             {label}
           </button>
         ))}
-        {isModerator && (
+        {isMaintainer && (
           <button
-            className={`nav-item ${section === "moderator" ? "active" : ""}`}
-            onClick={() => onSection("moderator")}
+            className={`nav-item ${section === "maintainer" ? "active" : ""}`}
+            onClick={() => onSection("maintainer")}
           >
             <ShieldCheck size={19} />
-            Moderator
+            Maintainer
           </button>
         )}
       </nav>
@@ -87,7 +87,7 @@ export function PawnSidebar({
         <button onClick={onHelp}>
           <CircleHelp size={21} />
           <span>
-            Moderator ·<strong>Punyam Chauhan</strong>
+            Maintainer ·<strong>Punyam Chauhan</strong>
           </span>
           <ArrowUpRight size={16} />
         </button>

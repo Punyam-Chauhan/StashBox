@@ -23,7 +23,7 @@ export function OwnRow({
   const blocked =
     prohibitedReason(item.name + " " + (item.offer_text || "")) ||
     (item.moderation_status && item.moderation_status !== "approved"
-      ? "Removed by the moderator."
+      ? "Removed by the maintainer."
       : null);
   const effective = currentPrice(item);
   const [price, setPrice] = useState(String(effective / 100)),

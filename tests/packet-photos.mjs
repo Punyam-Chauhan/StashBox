@@ -203,7 +203,7 @@ try {
   );
   check(
     (await service.directory(true)).some((p) => p.name === cached[0].name),
-    "Moderator can still find removed prepared products",
+    "Maintainer can still find removed prepared products",
   );
   await assert.rejects(
     service.store(new Uint8Array(MAX_PHOTO_BYTES + 1), info),

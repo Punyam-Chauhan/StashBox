@@ -34,16 +34,16 @@ See [the architecture guide](docs/architecture.md) for ownership, dependency bou
 
 ## Routes
 
-| Route           | Screen                                              |
-| --------------- | --------------------------------------------------- |
-| /               | Hostel chooser or selected hostel's snack directory |
-| /stash          | Public stock management                             |
-| /dashboard      | Private Stasher notebook                            |
-| /moderator      | StashBox moderation                                 |
-| /pawn           | The Pawn Shop                                       |
-| /pawn/deploy    | Item creation, own listings and optional payment QR |
-| /pawn/rules     | Pawn community rules                                |
-| /pawn/moderator | Separate Pawn moderation                            |
+| Route            | Screen                                              |
+| ---------------- | --------------------------------------------------- |
+| /                | Hostel chooser or selected hostel's snack directory |
+| /stash           | Public stock management                             |
+| /dashboard       | Private Stasher notebook                            |
+| /maintainer      | StashBox moderation                                 |
+| /pawn            | The Pawn Shop                                       |
+| /pawn/deploy     | Item creation, own listings and optional payment QR |
+| /pawn/rules      | Pawn community rules                                |
+| /pawn/maintainer | Separate Pawn moderation                            |
 
 Older Pawn links remain compatible and canonicalize to /pawn. The selected hostel is remembered in the browser and highlighted on return. Closed snack stashes are completely hidden; Pawn availability is independent.
 

@@ -165,16 +165,16 @@ try {
   });
   sql(`UPDATE users SET role='admin' WHERE id='${id}'`);
   await page.reload();
-  await page.getByRole("button", { name: "Moderator", exact: true }).click();
+  await page.getByRole("button", { name: "Maintainer", exact: true }).click();
   await page
-    .locator(".moderator-tool-card")
+    .locator(".maintainer-tool-card")
     .filter({ hasText: "Product catalogue" })
     .click();
   await page
-    .getByRole("textbox", { name: "Search moderator entries" })
+    .getByRole("textbox", { name: "Search maintainer entries" })
     .fill(newName);
   await page
-    .locator(".moderator-entry")
+    .locator(".maintainer-entry")
     .filter({ hasText: newName })
     .getByRole("button", { name: "Edit product", exact: true })
     .click();
@@ -236,7 +236,7 @@ try {
     .click();
   await page.getByRole("button", { name: "Add product", exact: true }).click();
   await page
-    .locator(".moderator-focused-panel")
+    .locator(".maintainer-focused-panel")
     .getByLabel("Product name", { exact: true })
     .fill(newName + " Panel");
   await page

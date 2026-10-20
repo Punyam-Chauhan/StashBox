@@ -3,7 +3,7 @@ import {
   todayIST,
   type LedgerEntry,
 } from "../domain/bookkeeping";
-import { asciiDisplay, asciiText, checkContent } from "../domain/moderation";
+import { asciiDisplay, asciiText, checkContent } from "./content-policy";
 type Context = { db: D1Database; user: any; body: () => Promise<any> };
 export async function sellerDashboard(
   req: Request,

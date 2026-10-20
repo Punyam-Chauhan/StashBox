@@ -1,4 +1,5 @@
 "use client";
+import { matchesSearch, type SearchAlias } from "../../domain/site-settings";
 import {
   ArrowUpRight,
   MapPin,
@@ -56,12 +57,14 @@ function PawnArt({ item }: { item: PawnItem }) {
   );
 }
 export function PawnShop({
+  searchAliases = [],
   user,
   onLogin,
   onProfile,
   section = "all",
   onSection,
 }: {
+  searchAliases?: SearchAlias[];
   user: User | null;
   onLogin: () => void;
   onProfile: () => void;
@@ -104,9 +107,11 @@ export function PawnShop({
   const tab = section === "mine" ? "mine" : "all";
   const rows = (tab === "mine" ? own : items)
     .filter((i) =>
-      `${i.title} ${i.description} ${i.seller_name || ""} ${hostelName(i.hostel)}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+      matchesSearch(
+        `${i.title} ${i.description} ${i.seller_name || ""} ${hostelName(i.hostel)}`,
+        query,
+        searchAliases,
+      ),
     )
     .sort(sort === "price" ? (a, b) => a.price - b.price : () => 0);
   function sell() {
@@ -215,7 +220,7 @@ export function PawnShop({
                           <strong>{money(i.price)}</strong>
                           <p>
                             {i.status === "rejected"
-                              ? "Hidden by moderator"
+                              ? "Hidden by maintainer"
                               : i.available
                                 ? "On the shop floor"
                                 : "Sold"}
@@ -317,7 +322,7 @@ export function PawnShop({
             <h2>Look out for each other.</h2>
             <p>
               Keep listings honest and respectful. If something does not seem
-              right, contact your moderator through Help & support.
+              right, contact your maintainer through Help & support.
             </p>
           </article>
         </div>
@@ -424,7 +429,7 @@ export function PawnShop({
                 <div className="pawn-owner-controls">
                   <span>
                     {i.status === "rejected"
-                      ? "Removed by moderator"
+                      ? "Removed by maintainer"
                       : i.available
                         ? "Live"
                         : "Sold"}

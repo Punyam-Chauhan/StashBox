@@ -1,23 +1,9 @@
+import { importTypeScript } from "./helpers/import-typescript.mjs";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import ts from "typescript";
 import { Miniflare } from "miniflare";
-const transpile = (s) =>
-    ts.transpileModule(s, {
-      compilerOptions: {
-        target: ts.ScriptTarget.ES2022,
-        module: ts.ModuleKind.ESNext,
-      },
-    }).outputText,
-  url = (s) =>
-    "data:text/javascript;base64," + Buffer.from(s).toString("base64");
-const moderation = url(
-    transpile(fs.readFileSync("src/domain/moderation.ts", "utf8")),
-  ),
-  source = transpile(
-    fs.readFileSync("src/server/hostel-management.ts", "utf8"),
-  ).replace(/['"]\.\.\/domain\/moderation['"]/, JSON.stringify(moderation));
-const { manageHostels } = await import(url(source));
+const { manageHostels } = await importTypeScript(
+  "src/server/hostel-management.ts",
+);
 const mf = new Miniflare({
   modules: true,
   script: 'export default {fetch(){return new Response("test")}}',

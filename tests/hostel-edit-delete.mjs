@@ -74,9 +74,9 @@ try {
   hostelId = (await created.json()).id;
   await page.goto(base + "/");
   await page.locator(".account-button").waitFor();
-  await page.getByRole("button", { name: "Moderator", exact: true }).click();
+  await page.getByRole("button", { name: "Maintainer", exact: true }).click();
   await page
-    .locator(".moderator-tool-card")
+    .locator(".maintainer-tool-card")
     .filter({ hasText: "Bhawans" })
     .click();
   const panel = page.locator(".hostel-manager");

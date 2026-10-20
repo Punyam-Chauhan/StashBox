@@ -185,7 +185,7 @@ try {
   await page.getByRole("button", { name: "Toggle menu" }).click();
   await page.locator(".sidebar-bottom>button").click();
   dialog = page.getByRole("dialog");
-  assert((await dialog.innerText()).includes("Your campus moderator"));
+  assert((await dialog.innerText()).includes("Your campus maintainer"));
   assert(!(await dialog.innerText()).includes("payment QR"));
   await dialog.getByRole("button", { name: "Close dialog" }).click();
   assert.equal(errors.length, 0, errors.join("\n"));

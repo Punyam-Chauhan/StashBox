@@ -1,4 +1,5 @@
 "use client";
+import { MaintainerControls, type ControlTool } from "./maintainer-controls";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -25,7 +26,8 @@ type Tool =
   | "uploads"
   | "payments"
   | "bhawans"
-  | "accounts";
+  | "accounts"
+  | ControlTool;
 type Entry = {
   id: string;
   kind: "snack" | "product" | "photo" | "pawn" | "qr";
@@ -35,7 +37,7 @@ type Entry = {
   raw: any;
 };
 type ProductTarget = { name: string; category: string };
-export function ModeratorWorkspace({
+export function MaintainerWorkspace({
   experience,
   onChanged,
   accountTools,
@@ -62,7 +64,7 @@ export function ModeratorWorkspace({
     try {
       const r = await fetch("/api/" + endpoint),
         d: any = await r.json();
-      if (!r.ok) throw Error(d.error || "Could not load moderator tools.");
+      if (!r.ok) throw Error(d.error || "Could not load maintainer tools.");
       setData(d);
       setError("");
     } catch (e) {
@@ -97,7 +99,7 @@ export function ModeratorWorkspace({
         id: r.id,
         kind: "photo",
         name: r.matched_name,
-        subtitle: `Uploaded by ${r.seller_name || "Moderator"}`,
+        subtitle: `Uploaded by ${r.seller_name || "Maintainer"}`,
         status: r.review_status,
         raw: r,
       }));
@@ -178,6 +180,28 @@ export function ModeratorWorkspace({
           Icon: Users,
         },
       ];
+  if (!pawn)
+    tools.push(
+      {
+        key: "site",
+        title: "Site controls",
+        description:
+          "Maintenance, announcements, signups, uploads and Pawn availability.",
+        Icon: ShieldCheck,
+      },
+      {
+        key: "wordlists",
+        title: "Wordlists & search",
+        description: "Upload blocked words and product search aliases.",
+        Icon: Search,
+      },
+      {
+        key: "activity",
+        title: "Recent actions",
+        description: "Review changes made by Maintainers.",
+        Icon: RefreshCw,
+      },
+    );
   const selected =
     tools.find((t) => t.key === tool) ||
     (tool === "uploads"
@@ -237,11 +261,13 @@ export function ModeratorWorkspace({
           ? "code"
           : "listing";
   return (
-    <section className={`moderator-workspace ${pawn ? "pawn-moderator" : ""}`}>
-      <header className="moderator-page-heading">
+    <section
+      className={`maintainer-workspace ${pawn ? "pawn-maintainer" : ""}`}
+    >
+      <header className="maintainer-page-heading">
         <div>
           <span className="eyebrow">
-            {pawn ? "THE PAWN SHOP" : "STASHBOX"} · MODERATOR
+            {pawn ? "THE PAWN SHOP" : "STASHBOX"} · MAINTAINER
           </span>
           <h1>
             {pawn ? "The shopkeeper’s desk." : "Keep the stash in order."}
@@ -262,10 +288,10 @@ export function ModeratorWorkspace({
         </button>
       </header>
       {tool && (
-        <div className="moderator-breadcrumb">
+        <div className="maintainer-breadcrumb">
           <button className="text-button" onClick={() => open(null)}>
             <ArrowLeft size={16} />
-            All moderator tools
+            All maintainer tools
           </button>
           <span>/</span>
           <strong>{selected?.title}</strong>
@@ -278,11 +304,11 @@ export function ModeratorWorkspace({
       )}
       {!tool ? (
         <>
-          <div className="moderator-tool-grid">
+          <div className="maintainer-tool-grid">
             {tools.map(({ key, title, description, Icon, count }) => (
               <button
                 key={key}
-                className="moderator-tool-card"
+                className="maintainer-tool-card"
                 onClick={() => open(key)}
               >
                 <div>
@@ -291,7 +317,7 @@ export function ModeratorWorkspace({
                 </div>
                 <h2>{title}</h2>
                 <p>{description}</p>
-                <span className="moderator-tool-link">
+                <span className="maintainer-tool-link">
                   Open section
                   <ArrowUpRight size={17} />
                 </span>
@@ -299,7 +325,7 @@ export function ModeratorWorkspace({
             ))}
           </div>
           {!data && !error && <p role="status">Loading overview...</p>}
-          <div className="moderator-overview-note">
+          <div className="maintainer-overview-note">
             <ShieldCheck size={20} />
             <p>
               {pawn
@@ -308,19 +334,21 @@ export function ModeratorWorkspace({
             </p>
           </div>
         </>
+      ) : ["site", "wordlists", "activity"].includes(tool) ? (
+        <MaintainerControls tool={tool as ControlTool} onChanged={onChanged} />
       ) : tool === "bhawans" ? (
         <HostelManager onChanged={onChanged} />
       ) : tool === "accounts" ? (
-        <section className="moderator-focused-panel">{accountTools}</section>
+        <section className="maintainer-focused-panel">{accountTools}</section>
       ) : (
-        <section className="moderator-focused-panel">
-          <div className="moderator-section-heading">
+        <section className="maintainer-focused-panel">
+          <div className="maintainer-section-heading">
             <h2>{selected?.title}</h2>
             <p>{selected?.description}</p>
           </div>
           <>
             {tool === "catalogue" && (
-              <div className="moderator-image-tabs">
+              <div className="maintainer-image-tabs">
                 <button
                   className="button ghost"
                   onClick={() => setCreating(!creating)}
@@ -344,11 +372,11 @@ export function ModeratorWorkspace({
                 }}
               />
             )}
-            <div className="moderator-list-controls">
+            <div className="maintainer-list-controls">
               <label className="search-box">
                 <Search size={18} />
                 <input
-                  aria-label="Search moderator entries"
+                  aria-label="Search maintainer entries"
                   placeholder="Find an item, Stasher or room"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -364,7 +392,7 @@ export function ModeratorWorkspace({
                 <option value="hidden">Hidden or removed</option>
               </select>
             </div>
-            <div className="moderator-list-summary">
+            <div className="maintainer-list-summary">
               <span>
                 {visible.length} {visible.length === 1 ? "entry" : "entries"}
               </span>
@@ -381,10 +409,10 @@ export function ModeratorWorkspace({
             {!data ? (
               <p role="status">Loading this section...</p>
             ) : visible.length ? (
-              <div className="moderator-entry-list">
+              <div className="maintainer-entry-list">
                 {visible.map((e) => (
-                  <article key={e.id} className="moderator-entry">
-                    <div className="moderator-entry-image">
+                  <article key={e.id} className="maintainer-entry">
+                    <div className="maintainer-entry-image">
                       {e.kind === "snack" || e.kind === "product" ? (
                         <PacketPhoto item={e.raw} />
                       ) : e.kind === "photo" ? (
@@ -403,10 +431,10 @@ export function ModeratorWorkspace({
                         <Package size={25} />
                       )}
                     </div>
-                    <div className="moderator-entry-copy">
+                    <div className="maintainer-entry-copy">
                       <strong>{e.name}</strong>
                       <p>{e.subtitle}</p>
-                      <div className="moderator-entry-tags">
+                      <div className="maintainer-entry-tags">
                         <span
                           className={
                             e.status === "approved"
@@ -425,7 +453,7 @@ export function ModeratorWorkspace({
                         {e.raw.missing_photo && <span>Image needed</span>}
                       </div>
                     </div>
-                    <div className="moderator-entry-actions">
+                    <div className="maintainer-entry-actions">
                       {!pawn &&
                         (e.kind === "product" || e.kind === "snack") && (
                           <button
@@ -464,7 +492,7 @@ export function ModeratorWorkspace({
                       )}
                       {!(e.kind === "product" && e.status === "removed") && (
                         <button
-                          className="button ghost moderator-delete"
+                          className="button ghost maintainer-delete"
                           disabled={busy}
                           onClick={() => {
                             setError("");
@@ -482,7 +510,7 @@ export function ModeratorWorkspace({
                 ))}
               </div>
             ) : (
-              <div className="moderator-empty">
+              <div className="maintainer-empty">
                 <Package size={30} />
                 <h3>No matching entries.</h3>
                 <p>Try a different search or visibility filter.</p>
@@ -596,7 +624,7 @@ export function ModeratorWorkspace({
                 {error}
               </p>
             )}
-            <div className="moderator-confirm-actions">
+            <div className="maintainer-confirm-actions">
               <button
                 className="button ghost"
                 disabled={busy}

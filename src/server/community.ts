@@ -1,8 +1,4 @@
-import {
-  asciiText,
-  checkContent,
-  prohibitedReason,
-} from "../domain/moderation";
+import { asciiText, checkContent, prohibitedReason } from "./content-policy";
 import { registeredHostel } from "./hostels";
 import {
   deleteMarketMedia,
@@ -10,7 +6,7 @@ import {
   releasePhoto,
   reservePhoto,
 } from "./image-storage";
-import { moderationConsole } from "./moderation-console";
+import { maintainerConsole } from "./maintainer-console";
 import { imageType, MAX_PHOTO_BYTES } from "./packet-photos";
 type Context = {
   db: D1Database;
@@ -286,6 +282,6 @@ export async function community(
     return json({ ok: true });
   }
   if (path === "admin/review" || path === "pawn/admin/review")
-    return moderationConsole(req, path, { db, bucket, user, body: c.body });
+    return maintainerConsole(req, path, { db, bucket, user, body: c.body });
   return null;
 }

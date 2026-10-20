@@ -144,7 +144,7 @@ export function PhotoManager({
                 !p.photo_id.startsWith("library-") &&
                 current && (
                   <button
-                    className="button ghost moderator-delete"
+                    className="button ghost maintainer-delete"
                     disabled={busy}
                     onClick={() => onRemovePhoto(p, current)}
                   >

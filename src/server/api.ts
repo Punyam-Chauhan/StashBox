@@ -1,9 +1,12 @@
-import { env } from "cloudflare:workers";
+import { withContentPolicy } from "./content-policy";
 import {
-  asciiText,
-  checkContent,
-  prohibitedReason,
-} from "../domain/moderation";
+  readSiteSettings,
+  siteControls,
+  publicSiteResponse,
+  siteActivity,
+} from "./site-controls";
+import { env } from "cloudflare:workers";
+import { asciiText, checkContent, prohibitedReason } from "./content-policy";
 import {
   PACKET_LIBRARY,
   libraryProduct,
@@ -243,7 +246,11 @@ async function body(req: Request) {
   if (!req.headers.get("content-type")?.includes("application/json"))
     fail(415, "Send JSON data.");
   const raw = requestBodies.get(req) ?? (await req.text());
-  if (raw.length > 16000) fail(413, "Request is too large.");
+  if (
+    raw.length >
+    (new URL(req.url).pathname === "/api/admin/site" ? 24000 : 16000)
+  )
+    fail(413, "Request is too large.");
   try {
     const value = JSON.parse(raw);
     if (!value || typeof value !== "object" || Array.isArray(value))
@@ -262,10 +269,21 @@ async function handle(req: Request) {
       fail(403, "Please use StashBox directly.");
     if (
       Number(req.headers.get("content-length") || 0) >
-      (path === "photos/upload" ? MAX_PHOTO_BYTES : 16000)
+      (path === "photos/upload"
+        ? MAX_PHOTO_BYTES
+        : path === "admin/site"
+          ? 24000
+          : 16000)
     )
       fail(413, "Request is too large.");
   }
+  if (path === "admin/site") {
+    const actor = await admin(req);
+    if (req.method !== "GET") await rate(req, "site-controls", 60);
+    return siteControls(req, db(), actor, () => body(req));
+  }
+  if (path === "admin/activity" && req.method === "GET")
+    return siteActivity(db(), await admin(req));
   if (path === "hostels" && req.method === "GET")
     return json({ hostels: await hostelDirectory(db()) });
   if (
@@ -761,7 +779,7 @@ async function handle(req: Request) {
     if (catalogue && catalogue.moderation_status !== "approved")
       fail(
         400,
-        "This product is not available in the catalogue. Contact the moderator if it needs updating.",
+        "This product is not available in the catalogue. Contact the maintainer if it needs updating.",
       );
     let pricing;
     try {
@@ -1206,7 +1224,11 @@ async function route(req: Request) {
       const upload = new URL(req.url).pathname.match(
           /^\/api\/(photos\/upload|market\/upload)$/,
         ),
-        limit = upload ? MAX_PHOTO_BYTES : 16000;
+        limit = upload
+          ? MAX_PHOTO_BYTES
+          : new URL(req.url).pathname === "/api/admin/site"
+            ? 24000
+            : 16000;
       if (Number(req.headers.get("content-length") || 0) > limit)
         fail(413, "Request is too large.");
       const reader = req.body?.getReader();
@@ -1232,7 +1254,61 @@ async function route(req: Request) {
       if (upload) requestImages.set(req, bytes);
       else requestBodies.set(req, new TextDecoder().decode(bytes));
     }
-    return await handle(req);
+    const path = new URL(req.url).pathname.replace(/^\/api\//, "");
+    const { settings } = await readSiteSettings(db());
+    if (path === "site" && req.method === "GET")
+      return publicSiteResponse(settings);
+    const actor = await currentUser(req, false),
+      maintainer = actor?.role === "admin" && !actor.must_change_password;
+    const recoveryPaths = [
+      "me",
+      "hostels",
+      "login",
+      "logout",
+      "password",
+      "admin/bootstrap",
+    ];
+    if (
+      settings.maintenanceUntil > Date.now() &&
+      !maintainer &&
+      !recoveryPaths.includes(path)
+    )
+      return Response.json(
+        {
+          error: settings.maintenanceMessage,
+          maintenanceUntil: settings.maintenanceUntil,
+        },
+        {
+          status: 503,
+          headers: {
+            "Cache-Control": "no-store",
+            "Retry-After": String(
+              Math.ceil((settings.maintenanceUntil - Date.now()) / 1000),
+            ),
+          },
+        },
+      );
+    if (
+      !settings.pawnEnabled &&
+      (path.startsWith("pawn") ||
+        (path === "market/upload" &&
+          new URL(req.url).searchParams.get("kind") === "pawn"))
+    )
+      return json({ error: "This page is unavailable." }, 404);
+    if (!settings.signupEnabled && path === "signup")
+      return json(
+        {
+          error:
+            "New registrations are paused. Existing accounts can still log in.",
+        },
+        403,
+      );
+    if (
+      !settings.uploadsEnabled &&
+      ["photos/upload", "market/upload"].includes(path)
+    )
+      return json({ error: "New image uploads are temporarily paused." }, 403);
+    return await withContentPolicy(settings.blockedWords, () => handle(req));
   } catch (e) {
     if (e instanceof ApiError) return json({ error: e.message }, e.status);
     if ([409, 413, 507].includes((e as any)?.status))

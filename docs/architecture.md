@@ -13,7 +13,7 @@
 | `src/features/pawn/`         | Pawn browsing, item form and navigation                    |
 | `src/features/payments/`     | Optional QR setup and preview                              |
 | `src/features/moderation/`   | Catalogue, uploads, listings and bhawans                   |
-| `src/features/support/`      | Contextual moderator dialog and vector art                 |
+| `src/features/support/`      | Contextual maintainer dialog and vector art                |
 | `src/domain/`                | Shared types, catalogue data and pure business rules       |
 | `src/shared/`                | Dialogs, motion hook, API transport and upload compression |
 | `src/server/`                | Request handler and scoped D1/R2 services                  |
@@ -37,7 +37,7 @@ The shell coordinates cross-screen state and account transitions. Add independen
 - Shared packet photos belong to the catalogue. Renames update stock/photo identities and private ledger keys together. Personal payment QRs are separate.
 - Bookkeeping is private to its account and uses integer paise/FIFO calculations. It does not automatically change public stock.
 - New uploads use shared WebP compression, server size/signature checks and atomic storage reservations.
-- Authentication, ownership, same-origin writes and moderator scope are enforced on the server.
+- Authentication, ownership, same-origin writes and maintainer scope are enforced on the server.
 - Password recovery issues a temporary password after identity verification. Current passwords cannot be viewed.
 
 ## Local data and generated files
@@ -45,6 +45,16 @@ The shell coordinates cross-screen state and account transitions. Add independen
 `.wrangler/state/` holds local D1/R2 data. `.dev.vars` and `.sites-runtime/maintainer-setup.txt` contain private setup material. `.sites-runtime/` also holds local tools and browser downloads. `dist/`, `.next/`, `.vinext/` and `outputs/` are generated. These ignored directories must not be committed or removed during source cleanup.
 
 Never rewrite an applied SQL migration. Add a migration for schema changes; startup records applied migrations in a local journal. Retain supplied `public/packets/` assets and their provenance in `src/domain/packet-library.json`. `scripts/import-packets.mjs` imports the reviewed source folder; browsing does not run image searches.
+
+## Maintainer controls
+
+Open **Maintainer → Site controls** to start or end maintenance, show/hide The Pawn Shop, pause registrations or image uploads, and publish a campus announcement. Maintenance always expires after two hours. Login, password recovery and signed-in Maintainer access remain available. Turning Pawn off preserves its listings while removing navigation and blocking direct API access.
+
+Open **Wordlists & search** to import or edit extra blocked words and search aliases. Blocked words use one phrase per line (or commas); aliases use `keyword = exact product name`, one per line. TXT and simple CSV files are supported. Import changes the draft; **Save wordlists** applies it. The built-in checks remain active. Matching older stock is hidden without deletion. The private blocked list is never included in public settings; search aliases are public so the browser can use them.
+
+Open **Recent actions** for the latest 100 Maintainer changes. Settings use revision checks to prevent silent overwrites between tabs. New controls are stored in `site_settings` by migration `0011_polite_starbolt.sql`. Public configuration refreshes on navigation/focus and every 15 seconds; restrictions are enforced immediately by the server on every request. Old Moderator URLs are compatibility aliases for the new `/maintainer` and `/pawn/maintainer` routes.
+
+`tests/site-controls.mjs` checks parsers, request isolation, permissions, revision conflicts and expiry rules. `tests/maintainer-controls-browser.mjs` checks the real controls, visitor restrictions, recovery, aliases, announcements and mobile layout. The browser test restores the saved settings and removes its synthetic account in `finally`.
 
 ## Verification
 

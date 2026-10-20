@@ -1,4 +1,4 @@
-import { checkContent } from "../domain/moderation";
+import { checkContent } from "./content-policy";
 import { libraryPhoto, photoGroup } from "../domain/packet-library";
 import {
   deleteMarketMedia,
@@ -13,7 +13,7 @@ type Context = {
   user: any;
   body: () => Promise<any>;
 };
-export async function moderationConsole(
+export async function maintainerConsole(
   req: Request,
   path: string,
   { db, bucket, user, body }: Context,
@@ -22,7 +22,7 @@ export async function moderationConsole(
     Response.json(v, { status, headers: { "Cache-Control": "no-store" } });
   if (!user) return json({ error: "Log in to continue." }, 401);
   if (user.role !== "admin" || user.must_change_password)
-    return json({ error: "Moderator access required." }, 403);
+    return json({ error: "Maintainer access required." }, 403);
   const pawnOnly = path === "pawn/admin/review",
     stashOnly =
       !pawnOnly && new URL(req.url).searchParams.get("market") === "stashbox",

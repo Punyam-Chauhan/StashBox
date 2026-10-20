@@ -302,14 +302,14 @@ try {
   );
   check(
     (await api("admin/review", "GET", undefined, a.cookie)).status === 403,
-    "Ordinary users cannot see moderator activity",
+    "Ordinary users cannot see maintainer activity",
   );
   sql("UPDATE users SET role='admin' WHERE id='" + b.data.user.id + "'");
   let dashboard = (await api("admin/review", "GET", undefined, b.cookie)).data;
   check(
     dashboard.pawn.some((i) => i.id === item.id) &&
       dashboard.qrs.some((q) => q.id === qr.data.id),
-    "Moderator sees new Pawn Shop listings and QR uploads",
+    "Maintainer sees new Pawn Shop listings and QR uploads",
   );
   await api(
     "admin/review",
@@ -319,12 +319,12 @@ try {
   );
   check(
     !(await api("pawn")).data.listings.some((i) => i.id === item.id),
-    "Moderator can remove a live item",
+    "Maintainer can remove a live item",
   );
   await api("pawn/mine/" + item.id, "PUT", { available: true }, a.cookie);
   check(
     !(await api("pawn")).data.listings.some((i) => i.id === item.id),
-    "Seller cannot bypass a moderator removal",
+    "Seller cannot bypass a maintainer removal",
   );
   await api(
     "admin/review",
@@ -334,7 +334,7 @@ try {
   );
   check(
     (await api("pawn")).data.listings.some((i) => i.id === item.id),
-    "Moderator can restore an item",
+    "Maintainer can restore an item",
   );
   await api(
     "admin/review",

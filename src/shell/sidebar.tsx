@@ -18,6 +18,7 @@ import {
   type PawnSection,
 } from "../features/pawn/pawn-sidebar";
 export function Sidebar({
+  pawnEnabled = false,
   menu,
   compactViewport,
   view,
@@ -30,6 +31,7 @@ export function Sidebar({
   onNavigate,
   onPawnSection,
 }: {
+  pawnEnabled?: boolean;
   menu: boolean;
   compactViewport: boolean;
   view: string;
@@ -58,7 +60,7 @@ export function Sidebar({
       </button>
       {view === "pawn" ? (
         <PawnSidebar
-          isModerator={user?.role === "admin"}
+          isMaintainer={user?.role === "admin"}
           section={pawnSection}
           onSection={onPawnSection}
           onBack={() => onNavigate("browse")}
@@ -76,7 +78,7 @@ export function Sidebar({
             stash<span>box</span>
             <sup>®</sup>
           </a>
-          <PawnAppSwitch onOpen={() => onNavigate("pawn")} />
+          {pawnEnabled && <PawnAppSwitch onOpen={() => onNavigate("pawn")} />}
           <div className="hostel-label">
             <i />
             YOUR CAMPUS. MANY STASHES.
@@ -127,7 +129,7 @@ export function Sidebar({
                 onClick={() => onNavigate("admin")}
               >
                 <ShieldCheck size={19} />
-                Moderator
+                Maintainer
               </button>
             )}
           </nav>
@@ -149,7 +151,7 @@ export function Sidebar({
             >
               <span className="avatar">PC</span>
               <span>
-                Moderator ·<strong>Punyam Chauhan</strong>
+                Maintainer ·<strong>Punyam Chauhan</strong>
               </span>
               <ArrowUpRight size={16} />
             </button>

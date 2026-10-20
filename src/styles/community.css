@@ -751,25 +751,25 @@
   object-fit: contain;
   border-radius: 8px;
 }
-.moderator-dashboard {
+.maintainer-dashboard {
   margin: 32px 0;
   padding: 26px;
   border: 1px solid #4d603e;
   background: #192514;
   border-radius: 12px;
 }
-.moderator-dashboard > header {
+.maintainer-dashboard > header {
   display: flex;
   justify-content: space-between;
   gap: 24px;
   align-items: center;
 }
-.moderator-dashboard h2 {
+.maintainer-dashboard h2 {
   font-size: 25px;
   line-height: 1.5;
   margin: 8px 0;
 }
-.moderator-dashboard header p {
+.maintainer-dashboard header p {
   font-size: 14px;
   line-height: 1.8;
   max-width: 65ch;
@@ -1079,10 +1079,10 @@
   .pawn-mode .topbar-left .hostel-switch > span {
     font-size: 12px;
   }
-  .moderator-dashboard {
+  .maintainer-dashboard {
     padding: 18px 14px;
   }
-  .moderator-dashboard > header {
+  .maintainer-dashboard > header {
     flex-direction: column;
     align-items: flex-start;
   }

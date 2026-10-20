@@ -567,7 +567,7 @@ export function SnackForm({
       {photo && (
         <p className="shared-photo-lock">
           <Check size={16} />
-          Product photo selected. Contact the moderator if it needs updating.
+          Product photo selected. Contact the maintainer if it needs updating.
         </p>
       )}
       <PricingFields initial={initial} />

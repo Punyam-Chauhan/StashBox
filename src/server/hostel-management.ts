@@ -1,4 +1,4 @@
-import { asciiText, checkContent } from "../domain/moderation";
+import { asciiText, checkContent } from "./content-policy";
 export async function manageHostels(
   req: Request,
   path: string,

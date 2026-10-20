@@ -76,9 +76,9 @@ try {
   );
   sql("UPDATE users SET role='admin' WHERE id='" + admin.id + "'");
   await page.goto(base + "/");
-  await page.getByRole("button", { name: "Moderator", exact: true }).click();
+  await page.getByRole("button", { name: "Maintainer", exact: true }).click();
   await page
-    .locator(".moderator-tool-card")
+    .locator(".maintainer-tool-card")
     .filter({ hasText: "Bhawans" })
     .click();
   const panel = page.locator(".hostel-manager");
@@ -137,7 +137,7 @@ try {
     1,
   );
   console.log(
-    "PASS moderator-managed hostels: auth, add through UI, duplicate protection, dynamic chooser, URL reload, signup options, resident signup and isolated snack feed",
+    "PASS maintainer-managed hostels: auth, add through UI, duplicate protection, dynamic chooser, URL reload, signup options, resident signup and isolated snack feed",
   );
 } finally {
   await browser.close();

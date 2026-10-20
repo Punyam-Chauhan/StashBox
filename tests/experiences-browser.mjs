@@ -60,16 +60,19 @@ async function signup(context, suffix) {
   return u;
 }
 async function tool(title) {
-  await page.locator(".moderator-tool-card").filter({ hasText: title }).click();
+  await page
+    .locator(".maintainer-tool-card")
+    .filter({ hasText: title })
+    .click();
 }
 async function overview() {
   await page
-    .getByRole("button", { name: "All moderator tools", exact: true })
+    .getByRole("button", { name: "All maintainer tools", exact: true })
     .click();
 }
 async function search(text) {
   await page
-    .getByRole("textbox", { name: "Search moderator entries" })
+    .getByRole("textbox", { name: "Search maintainer entries" })
     .fill(text);
 }
 async function confirm(button) {
@@ -184,20 +187,20 @@ try {
     .getByRole("dialog")
     .getByRole("button", { name: "Close dialog" })
     .click();
-  await page.getByRole("button", { name: "Moderator", exact: true }).click();
-  assert.equal(new URL(page.url()).pathname, "/moderator");
-  await page.locator(".moderator-tool-card").first().waitFor();
+  await page.getByRole("button", { name: "Maintainer", exact: true }).click();
+  assert.equal(new URL(page.url()).pathname, "/maintainer");
+  await page.locator(".maintainer-tool-card").first().waitFor();
   assert.equal(
     await page.locator(".hostel-manager,.photo-manager,.admin-users").count(),
     0,
-    "Moderator starts with overview only",
+    "Maintainer starts with overview only",
   );
   await page
-    .locator(".moderator-workspace")
-    .screenshot({ path: "outputs/stash-moderator-overview.png" });
+    .locator(".maintainer-workspace")
+    .screenshot({ path: "outputs/stash-maintainer-overview.png" });
   await tool("Stock listings");
   await search(name);
-  let row = page.locator(".moderator-entry").filter({ hasText: name });
+  let row = page.locator(".maintainer-entry").filter({ hasText: name });
   await row.getByRole("button", { name: "Hide listing", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Filter entry status" })
@@ -214,7 +217,7 @@ try {
   await overview();
   await tool("Product catalogue");
   await search(name);
-  row = page.locator(".moderator-entry").filter({ hasText: name });
+  row = page.locator(".maintainer-entry").filter({ hasText: name });
   await row.getByRole("button", { name: "Edit product", exact: true }).click();
   let editor = page.getByRole("dialog");
   assert.equal(
@@ -262,7 +265,7 @@ try {
       })
     ).status(),
     403,
-    "Only moderator can rename",
+    "Only maintainer can rename",
   );
   await editor.getByLabel("Product name", { exact: true }).fill(name);
   save = page.waitForResponse(
@@ -314,7 +317,7 @@ try {
     .getByRole("button", { name: "Manage uploaded photos", exact: true })
     .click();
   await search(name);
-  row = page.locator(".moderator-entry").filter({ hasText: name });
+  row = page.locator(".maintainer-entry").filter({ hasText: name });
   await row.getByRole("button", { name: "Delete photo", exact: true }).click();
   await confirm("Delete photo");
   assert.equal(
@@ -325,7 +328,7 @@ try {
   await tool("Stock listings");
   await search(name);
   await page
-    .locator(".moderator-entry")
+    .locator(".maintainer-entry")
     .getByRole("button", { name: "Delete listing", exact: true })
     .click();
   await confirm("Delete listing");
@@ -439,10 +442,10 @@ try {
   await page.reload();
   await page.locator(".pawn-sidebar-brand").waitFor();
   assert.equal(new URL(page.url()).pathname, "/pawn/deploy");
-  await page.getByRole("button", { name: "Moderator", exact: true }).click();
-  assert.equal(new URL(page.url()).pathname, "/pawn/moderator");
-  await page.locator(".moderator-tool-card").first().waitFor();
-  assert.equal(await page.locator(".moderator-tool-card").count(), 2);
+  await page.getByRole("button", { name: "Maintainer", exact: true }).click();
+  assert.equal(new URL(page.url()).pathname, "/pawn/maintainer");
+  await page.locator(".maintainer-tool-card").first().waitFor();
+  assert.equal(await page.locator(".maintainer-tool-card").count(), 2);
   assert.equal(await page.locator(".hostel-manager").count(), 0);
   const scoped = await (
     await admin.request.get(base + "/api/pawn/admin/review")
@@ -458,11 +461,11 @@ try {
     400,
   );
   await page
-    .locator(".moderator-workspace")
-    .screenshot({ path: "outputs/pawn-moderator-overview.png" });
+    .locator(".maintainer-workspace")
+    .screenshot({ path: "outputs/pawn-maintainer-overview.png" });
   await tool("Shop listings");
   await search(pawnName);
-  row = page.locator(".moderator-entry");
+  row = page.locator(".maintainer-entry");
   await row.getByRole("button", { name: "Hide listing", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Filter entry status" })
@@ -512,7 +515,7 @@ try {
   assert.equal(new URL(page.url()).search, "");
   assert.equal(errors.length, 0, errors.join("\n"));
   console.log(
-    "PASS separate Pawn routes/reload/legacy migration, unified sell/payments, no snack shutter, one selling CTA, task-based/scoped moderator pages, consistent hide/restore/delete, catalogue suppression and image cleanup",
+    "PASS separate Pawn routes/reload/legacy migration, unified sell/payments, no snack shutter, one selling CTA, task-based/scoped maintainer pages, consistent hide/restore/delete, catalogue suppression and image cleanup",
   );
 } catch (e) {
   await page.screenshot({

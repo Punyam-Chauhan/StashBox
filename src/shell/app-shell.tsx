@@ -1,4 +1,5 @@
 "use client";
+import { matchesSearch, type PublicSettings } from "../domain/site-settings";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -53,7 +54,7 @@ import { PacketPhoto, PhotoCredit } from "../features/catalogue/product-photos";
 import { SnackForm } from "../features/catalogue/snack-form";
 import { SellerDashboard } from "../features/dashboard/stasher-dashboard";
 import { Hero, HostelLanding } from "../features/hostels/hostel-landing";
-import { ModeratorWorkspace } from "../features/moderation/moderator-workspace";
+import { MaintainerWorkspace } from "../features/moderation/maintainer-workspace";
 import { PawnMark } from "../features/pawn/pawn-mark";
 import { PawnShop } from "../features/pawn/pawn-shop";
 import { type PawnSection } from "../features/pawn/pawn-sidebar";
@@ -81,6 +82,7 @@ export default function Home({
       initialPawnSection || "all",
     ),
     [authReturn, setAuthReturn] = useState("stash");
+  const [site, setSite] = useState<PublicSettings | null>(null);
   const [rememberedHostel, setRememberedHostel] = useState("");
   const [hostel, setHostel] = useState(""),
     [phaseGroup, setPhaseGroup] = useState("all");
@@ -117,8 +119,13 @@ export default function Home({
     const version = ++requestVersion.current;
     setError("");
     try {
-      const [me, registry] = await Promise.all([api("me"), api("hostels")]);
+      const [me, registry, config] = await Promise.all([
+        api("me"),
+        api("hostels"),
+        api("site"),
+      ]);
       if (version !== requestVersion.current) return;
+      setSite(config.settings);
       setHostels(registry.hostels);
       setUser(me.user);
       let saved = "";
@@ -138,6 +145,13 @@ export default function Home({
           chooseHostel("");
           return;
         }
+      }
+      if (
+        config.settings.maintenanceUntil > Date.now() &&
+        me.user?.role !== "admin"
+      ) {
+        setListings([]);
+        return;
       }
       const items =
         hostel && view !== "pawn"
@@ -173,6 +187,8 @@ export default function Home({
       setView(pawn ? "pawn" : stashViewAt(location.pathname));
       if (pawn) setPawnSection(pawn);
     };
+    if (location.pathname === "/moderator")
+      history.replaceState(null, "", "/maintainer" + location.search);
     const params = new URLSearchParams(location.search);
     let saved = "";
     try {
@@ -227,6 +243,44 @@ export default function Home({
   useEffect(() => {
     if (demo && hostel) setDemoData(demoListings(hostel));
   }, [demo, hostel]);
+  useEffect(() => {
+    const update = () =>
+      api("site")
+        .then((d) => setSite(d.settings))
+        .catch(() => {});
+    const timer = setInterval(update, 15000);
+    window.addEventListener("focus", update);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", update);
+    };
+  }, []);
+  useEffect(() => {
+    if (site && !site.pawnEnabled && view === "pawn") {
+      setView("browse");
+      setPawnSection("all");
+      setSelected(null);
+      setModal("");
+      history.replaceState(null, "", "/");
+    }
+  }, [site?.pawnEnabled, view]);
+  const resting =
+    !!site &&
+    site.maintenanceUntil > now &&
+    (user?.role !== "admin" || !!user.must_change_password);
+  useEffect(() => {
+    if (resting) {
+      setMenu(false);
+      setSelected(null);
+      setEditing(null);
+      setModal((current) =>
+        ["auth", "password", "recovery", "profile", "help"].includes(current)
+          ? current
+          : "",
+      );
+    }
+    if (site) void refresh();
+  }, [resting]);
   function chooseHostel(value: string) {
     requestVersion.current++;
     setListings([]);
@@ -311,6 +365,7 @@ export default function Home({
     setView("browse");
   }
   function pawnPane(pane: PawnSection) {
+    if (!site?.pawnEnabled) return;
     setMenu(false);
     setPawnSection(pane);
     setView("pawn");
@@ -409,9 +464,11 @@ export default function Home({
         !!l.is_open &&
         (wing === "all" || l.wing === wing) &&
         (category === CATEGORIES[0] || category === l.category) &&
-        `${l.name} ${mrpLabel(l.mrp)} ${l.size} ${l.room} ${l.seller_name}`
-          .toLowerCase()
-          .includes(query.toLowerCase()),
+        matchesSearch(
+          `${l.name} ${mrpLabel(l.mrp)} ${l.size} ${l.room} ${l.seller_name}`,
+          query,
+          site?.searchAliases || [],
+        ),
     );
     return groupProducts(filtered).sort(
       sort === "price"
@@ -420,7 +477,16 @@ export default function Home({
           ? (a, b) => a.name.localeCompare(b.name)
           : (a, b) => sellerCount(b.offers) - sellerCount(a.offers),
     );
-  }, [source, wing, category, query, sort, now, phaseGroup]);
+  }, [
+    source,
+    wing,
+    category,
+    query,
+    sort,
+    now,
+    phaseGroup,
+    site?.searchAliases,
+  ]);
   const activeSellers = new Set(
     source
       .filter(
@@ -437,8 +503,21 @@ export default function Home({
     setModal("");
     setAuthError("");
   };
+  if (!site || (!site.pawnEnabled && view === "pawn"))
+    return (
+      <div className="maintenance-screen" role="status">
+        {error || "Opening StashBox…"}
+        {error && (
+          <button className="button ghost" onClick={() => void refresh()}>
+            Try again
+          </button>
+        )}
+      </div>
+    );
   return (
-    <div className={`app-shell ${view === "pawn" ? "pawn-mode" : ""}`}>
+    <div
+      className={`app-shell ${resting ? "site-resting" : ""} ${view === "pawn" ? "pawn-mode" : ""}`}
+    >
       <button
         className={`drawer-backdrop ${menu ? "is-visible" : ""}`}
         aria-label="Close navigation"
@@ -446,19 +525,22 @@ export default function Home({
         tabIndex={menu ? 0 : -1}
         onClick={() => setMenu(false)}
       />
-      <Sidebar
-        menu={menu}
-        compactViewport={compactViewport}
-        view={view}
-        hostel={hostel}
-        user={user}
-        pawnSection={pawnSection}
-        onClose={() => setMenu(false)}
-        onModal={setModal}
-        onChooseHostel={chooseHostel}
-        onNavigate={navigate}
-        onPawnSection={pawnPane}
-      />
+      {!resting && (
+        <Sidebar
+          pawnEnabled={site.pawnEnabled}
+          menu={menu}
+          compactViewport={compactViewport}
+          view={view}
+          hostel={hostel}
+          user={user}
+          pawnSection={pawnSection}
+          onClose={() => setMenu(false)}
+          onModal={setModal}
+          onChooseHostel={chooseHostel}
+          onNavigate={navigate}
+          onPawnSection={pawnPane}
+        />
+      )}
       <div className="main-shell">
         <header className="topbar">
           <div className="topbar-left">
@@ -487,6 +569,7 @@ export default function Home({
               <ChevronDown size={13} />
             </button>
             <HeaderNavigation
+              pawnEnabled={site.pawnEnabled}
               label={
                 view === "pawn"
                   ? "The Pawn Shop"
@@ -515,9 +598,9 @@ export default function Home({
                           mine: "Your listings",
                           sell: "Deploy The Pawn",
                           rules: "Shop rules",
-                          moderator: "Moderator desk",
+                          maintainer: "Maintainer desk",
                         }[pawnSection]
-                      : "Moderator desk"}
+                      : "Maintainer desk"}
             </span>
           </div>
           <div className="topbar-actions">
@@ -565,629 +648,684 @@ export default function Home({
           </div>
         </header>
         <main>
-          {demo && view !== "pawn" && (
-            <div className="demo-banner">
-              <span>
-                <Sparkles size={15} />
-                Demo mode · These listings and Stashers are fictional.
-              </span>
-              <button
-                onClick={() => {
-                  setDemo(false);
-                  setSelected(null);
-                }}
-              >
-                Show real listings <ArrowRight size={14} />
-              </button>
-            </div>
-          )}
-
-          {["stash", "seller", "admin"].includes(view) && !user && !loading && (
-            <section className="empty-state">
-              <ShieldCheck size={34} />
-              <h1>Log in to continue.</h1>
-              <p>Your account keeps this section private.</p>
-              <button
-                className="button primary"
-                onClick={() => {
-                  setAuthTab("login");
-                  setModal("auth");
-                }}
-              >
-                Log in
-              </button>
+          {resting ? (
+            <section className="maintenance-screen">
+              <Clock3 size={36} />
+              <h1>We’ll be back shortly.</h1>
+              <p>{site.maintenanceMessage}</p>
+              <p>
+                Reopens automatically by{" "}
+                {new Date(site.maintenanceUntil).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+                .
+              </p>
+              <p>Maintainers can use the account button above to log in.</p>
             </section>
-          )}
-          {view === "seller" && user && (
-            <SellerDashboard onBrowse={() => navigate("browse")} />
-          )}
-          {view === "browse" && !hostel && (
-            <HostelLanding
-              selectedHostel={rememberedHostel}
-              onChoose={chooseHostel}
-              onDemo={() => {
-                setDemo(true);
-                document
-                  .getElementById("hostel-choices")
-                  ?.scrollIntoView({ behavior: "smooth" });
-              }}
-            />
-          )}
-          {view === "browse" && hostel && (
+          ) : (
             <>
-              <div className="stock-heading">
-                <div>
-                  <span className="eyebrow orange">
-                    YOUR HOSTEL’S SNACK SCENE
-                  </span>
-                  <h1>{hostelName(hostel)}</h1>
-                  <p>Find what’s stocked. Compare prices. Head to the room.</p>
-                </div>
-              </div>
-              {hostel === "mandakini" && (
-                <>
-                  <PhaseNotice />
-                  <div
-                    className="phase-tabs"
-                    aria-label="Mandakini phase filters"
-                  >
-                    {[
-                      ["all", "All phases"],
-                      ["connected", "Phases 1 & 2"],
-                      ["3", "Phase 3"],
-                    ].map(([value, label]) => (
-                      <button
-                        key={value}
-                        className={phaseGroup === value ? "selected" : ""}
-                        onClick={() => {
-                          setPhaseGroup(value);
-                          setWing("all");
-                        }}
-                      >
-                        {label}
-                        {value === "3" && <span>Separate access</span>}
-                      </button>
-                    ))}
-                  </div>
-                </>
+              {site.maintenanceUntil > now && user?.role === "admin" && (
+                <p className="site-maintainer-notice" role="status">
+                  Maintenance is active for visitors. Your Maintainer access
+                  stays open until it ends automatically.
+                </p>
               )}
-              <section className="directory" aria-label="Snack directory">
-                <div className="section-top">
-                  <div>
-                    <span className="eyebrow orange">THE LOCAL SUPPLY</span>
-                    <h2>
-                      What’s in the stash<span className="orange">?</span>
-                    </h2>
-                  </div>
-                  <div className="live-count">
-                    <i />
-                    <strong>{activeSellers}</strong>{" "}
-                    {activeSellers === 1 ? "Stasher" : "Stashers"} open now
-                    <button
-                      className="icon-btn"
-                      aria-label="Refresh listings"
-                      onClick={() => action(refresh)}
-                      disabled={busy}
-                    >
-                      <RefreshCw size={15} className={busy ? "spin" : ""} />
-                    </button>
-                  </div>
-                </div>
-                <div className="search-row">
-                  <label className="search-box">
-                    <Search size={20} />
-                    <input
-                      aria-label="Search snacks, rooms or Stashers"
-                      placeholder="What are you craving? Try Oreo, Maggi, room 224..."
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                    {query && (
-                      <button
-                        onClick={() => setQuery("")}
-                        aria-label="Clear search"
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                  </label>
-                </div>
-                <div className="filter-row">
-                  <div className="categories" aria-label="Snack categories">
-                    {CATEGORIES.map((c, i) => (
-                      <button
-                        key={c}
-                        className={category === c ? "selected" : ""}
-                        onClick={() => setCategory(c)}
-                      >
-                        <span aria-hidden="true">
-                          {["✳", "◒", "◈", "♨", "◉"][i]}
-                        </span>
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="availability-filters">
-                    <label className="wing-select">
-                      <SlidersHorizontal size={17} />
-                      <select
-                        aria-label="Filter by wing"
-                        value={wing}
-                        onChange={(e) => setWing(e.target.value)}
-                      >
-                        <option value="all">All wings</option>
-                        {availableWings.map((w) => (
-                          <option key={w} value={w}>
-                            Wing {w}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                </div>
-                <div className="results-row">
+              {site.announcement && (
+                <p className="site-announcement" role="status">
+                  {site.announcement}
+                </p>
+              )}
+              {demo && view !== "pawn" && (
+                <div className="demo-banner">
                   <span>
-                    {loading
-                      ? "Checking the cupboards…"
-                      : `${groups.length} ${groups.length === 1 ? "snack" : "snacks"} worth staying up for`}
+                    <Sparkles size={15} />
+                    Demo mode · These listings and Stashers are fictional.
                   </span>
-                  <label>
-                    Sort by{" "}
-                    <select
-                      aria-label="Sort listings"
-                      value={sort}
-                      onChange={(e) => setSort(e.target.value)}
-                    >
-                      <option value="popular">Most Stashers</option>
-                      <option value="price">Lowest price</option>
-                      <option value="name">Name A–Z</option>
-                    </select>
-                    <ChevronDown size={13} />
-                  </label>
+                  <button
+                    onClick={() => {
+                      setDemo(false);
+                      setSelected(null);
+                    }}
+                  >
+                    Show real listings <ArrowRight size={14} />
+                  </button>
                 </div>
-                {error && !demo ? (
-                  <div className="empty-state">
-                    <CircleHelp size={32} />
-                    <h3>Couldn’t check the stash.</h3>
-                    <p role="alert">{error}</p>
+              )}
+
+              {["stash", "seller", "admin"].includes(view) &&
+                !user &&
+                !loading && (
+                  <section className="empty-state">
+                    <ShieldCheck size={34} />
+                    <h1>Log in to continue.</h1>
+                    <p>Your account keeps this section private.</p>
                     <button
                       className="button primary"
                       onClick={() => {
-                        setLoading(true);
-                        refresh();
+                        setAuthTab("login");
+                        setModal("auth");
                       }}
                     >
-                      Try again
+                      Log in
                     </button>
-                  </div>
-                ) : loading && !demo ? (
-                  <div className="product-grid">
-                    {[0, 1, 2].map((n) => (
-                      <div key={n} className="skeleton-card" />
-                    ))}
-                  </div>
-                ) : groups.length ? (
-                  <div className="product-grid">
-                    {groups.map((g, i) => {
-                      const variants = groupVariants(g.offers),
-                        sellers = sellerCount(g.offers),
-                        lowest = startingPrice(g.offers),
-                        open = g.offers.some((o) => o.is_open),
-                        rooms = new Set(
-                          g.offers.map(
-                            (o) => `${o.phase || ""}|${o.wing}|${o.room}`,
-                          ),
-                        ).size;
-                      return (
-                        <button
-                          key={g.key}
-                          className="product-card"
-                          onClick={() => setSelected(g)}
-                          aria-label={`View ${g.name} · ${variants.length} pack options · ${sellers} sellers`}
-                        >
-                          <div className={`product-art tone-${i % 4}`}>
-                            <span className="pack-size">
-                              {variants.length > 1
-                                ? `${variants.length} pack options`
-                                : variants[0]?.label}
-                            </span>
-                            {sellers > 1 && (
-                              <span className="compare-badge">
-                                <SlidersHorizontal size={12} />
-                                {sellers} Stashers
-                              </span>
-                            )}
-                            <PacketPhoto
-                              item={
-                                g.offers.find((o) => o.photo_id) || g.offers[0]
-                              }
-                            />
-                          </div>
-                          <div className="product-info">
-                            <span className="product-category">
-                              {g.category}
-                            </span>
-                            {g.offers.some(
-                              (o) => o.photo_source === "openfoodfacts",
-                            ) && (
-                              <small className="card-photo-credit">
-                                Photo: Open Food Facts · CC BY-SA
-                              </small>
-                            )}
-                            <h3>{g.name}</h3>
-                            <span className="product-options">
-                              {variants.length > 1
-                                ? `${variants.length} MRP / pack options`
-                                : "Compare Stasher prices"}
-                            </span>
-                            {hostel === "mandakini" && (
-                              <div className="phase-chips">
-                                {Array.from(
-                                  new Set(g.offers.map((o) => o.phase)),
-                                )
-                                  .sort()
-                                  .map((p) => (
-                                    <span
-                                      key={p}
-                                      className={p === "3" ? "phase-three" : ""}
-                                    >
-                                      Phase {p}
-                                    </span>
-                                  ))}
-                              </div>
-                            )}
-                            <div className="product-price">
-                              <span>
-                                {(variants.length > 1 || sellers > 1) && (
-                                  <small>from </small>
-                                )}
-                                {money(lowest)}
-                              </span>
-                              <span className="product-arrow">
-                                <ArrowUpRight size={20} />
-                              </span>
-                            </div>
-                            <div className="product-meta">
-                              <span>
-                                <MapPin size={13} />
-                                {rooms === 1
-                                  ? `Room ${g.offers[0].room} · ${g.offers[0].wing}`
-                                  : `${rooms} room locations`}
-                              </span>
-                              <span className={open ? "in-stock" : "closed"}>
-                                <i />
-                                {open ? "Available" : "Closed"}
-                              </span>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="empty-state">
-                    <div className="empty-icon">
-                      <Package size={33} />
-                    </div>
-                    <h3>
-                      {source.length
-                        ? "That craving is still out there."
-                        : "No stashes open right now."}
-                    </h3>
-                    <p>
-                      {source.length
-                        ? "Try another snack or wing."
-                        : "Check back later, or list your own stash for the hostel."}
-                    </p>
-                    <div className="empty-actions">
-                      <button
-                        className="button primary"
-                        onClick={
-                          source.length
-                            ? () => {
-                                setQuery("");
-                                setWing("all");
-                                setCategory(CATEGORIES[0]);
-                                setPhaseGroup("all");
-                              }
-                            : sell
-                        }
-                      >
-                        {source.length
-                          ? "Clear filters"
-                          : "List your first snack"}
-                        <ArrowUpRight size={16} />
-                      </button>
-                      {!source.length && !demo && (
-                        <button className="button ghost" onClick={startDemo}>
-                          Explore a demo
-                          <ArrowRight size={16} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  </section>
                 )}
-                <div className="directory-footnote">
-                  <Clock3 size={14} />
-                  <span>
-                    Fresh stock, less guesswork. Listings hide after 24 hours
-                    without a Stasher update.
-                  </span>
-                </div>
-              </section>
-              <section className="how-strip">
-                {[
-                  ["01", "Find your fix.", "Search snacks across the hostel."],
-                  ["02", "Pick your room.", "Compare the same pack, fairly."],
-                  [
-                    "03",
-                    "Walk. Pay. Munch.",
-                    "Settle up directly with the Stasher.",
-                  ],
-                ].map(([n, t, p]) => (
-                  <div key={n}>
-                    <span>{n}</span>
-                    <p>
-                      <strong>{t}</strong>
-                      {p}
-                    </p>
-                  </div>
-                ))}
-              </section>
-              <Hero onSell={sell} />
-            </>
-          )}
-          {view === "pawn" &&
-            pawnSection === "moderator" &&
-            (user?.role === "admin" ? (
-              <ModeratorWorkspace experience="pawn" onChanged={refresh} />
-            ) : (
-              <section className="pawn-settings">
-                <h1>Moderator access</h1>
-                <p>
-                  {loading
-                    ? "Opening the moderator desk..."
-                    : "This area is available to campus moderators."}
-                </p>
-                {!user && !loading && (
-                  <button
-                    className="button pawn-primary"
-                    onClick={() => {
-                      setAuthReturn("pawn");
-                      setAuthTab("login");
-                      setModal("auth");
-                    }}
-                  >
-                    Log in
-                  </button>
-                )}
-              </section>
-            ))}
-          {view === "pawn" && pawnSection !== "moderator" && (
-            <PawnShop
-              user={user}
-              section={pawnSection}
-              onSection={pawnPane}
-              onLogin={() => {
-                setAuthReturn("pawn");
-                setAuthTab("login");
-                setModal("auth");
-              }}
-              onProfile={() =>
-                setModal(user?.must_change_password ? "password" : "profile")
-              }
-            />
-          )}
-          {view === "stash" && user && (
-            <section className="dashboard">
-              <div className="dashboard-heading">
-                <div>
-                  <span className="eyebrow orange">
-                    {hostelName(user.hostel)} · {locationText(user)}
-                  </span>
-                  <h1>
-                    Your stash.
-                    <br />
-                    <em>Your little empire.</em>
-                  </h1>
-                  <p>Keep your stock fresh. Keep your neighbours fed.</p>
-                </div>
-                <button
-                  className="button primary"
-                  onClick={() => setModal("add")}
-                >
-                  <Plus size={18} />
-                  Add a snack
-                </button>
-              </div>
-              <div
-                className={`stock-status-panel ${user.shop_sleeping || !user.is_open ? "status-paused" : now - user.confirmed_at >= 86400000 ? "status-stale" : "status-live"}`}
-              >
-                <div className="stock-status-icon">
-                  {user.shop_sleeping || !user.is_open ? (
-                    <Moon size={21} />
-                  ) : (
-                    <Clock3 size={21} />
-                  )}
-                </div>
-                <div>
-                  <strong>
-                    {user.shop_sleeping || !user.is_open
-                      ? "Your shop is resting"
-                      : now - user.confirmed_at >= 86400000
-                        ? "Time for a stock check"
-                        : "Your stash is live"}
-                  </strong>
-                  <p>
-                    {user.shop_sleeping || !user.is_open
-                      ? "Your items are hidden. Reopen from the header when you’re ready."
-                      : now - user.confirmed_at >= 86400000
-                        ? "Review your items to show your stash again."
-                        : `Stock checked ${relative(user.confirmed_at)}.`}
-                  </p>
-                </div>
-                <button
-                  className="button ghost"
-                  onClick={() => setModal("confirm")}
-                >
-                  <Check size={16} />
-                  Review stock
-                </button>
-              </div>
-              <SellerPayments onChanged={refresh} />
-              <div className="stash-heading">
-                <h2>{own.length} snacks in your cupboard</h2>
-              </div>
-              {own.length ? (
-                <div className="own-list">
-                  {own.map((item) => (
-                    <OwnRow
-                      key={item.id}
-                      item={item}
-                      busy={busy}
-                      onEdit={() => setEditing(item)}
-                      onSave={(price, available) =>
-                        action(async () => {
-                          await api(`mine/${item.id}`, "PUT", {
-                            price,
-                            available,
-                          });
-                          await loadOwn();
-                          setToast("Stash updated.");
-                        })
-                      }
-                      onDelete={() =>
-                        action(async () => {
-                          await api(`mine/${item.id}`, "DELETE");
-                          await loadOwn();
-                          setToast("Listing removed.");
-                        })
-                      }
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <Package size={36} />
-                  <h3>An empty cupboard has potential.</h3>
-                  <p>
-                    Add your first item and let your neighbours know what is
-                    available.
-                  </p>
-                  <button
-                    className="button primary"
-                    onClick={() => setModal("add")}
-                  >
-                    <Plus size={16} />
-                    Add a snack
-                  </button>
-                </div>
+              {view === "seller" && user && (
+                <SellerDashboard onBrowse={() => navigate("browse")} />
               )}
-            </section>
-          )}
-          {view === "admin" && user && user.role !== "admin" && (
-            <section className="empty-state">
-              <ShieldCheck size={34} />
-              <h1>Moderator access</h1>
-              <p>This section is available to campus moderators.</p>
-              <button
-                className="button primary"
-                onClick={() => navigate("browse")}
-              >
-                Back to snacks
-              </button>
-            </section>
-          )}
-          {view === "admin" && user?.role === "admin" && (
-            <ModeratorWorkspace
-              experience="stashbox"
-              onChanged={refresh}
-              accountTools={
-                <section className="admin-users-tool">
-                  <h2>Account recovery</h2>
-                  <form
-                    className="admin-search"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      loadAdmin();
-                    }}
-                  >
-                    <label className="search-box">
-                      <Search size={19} />
-                      <input
-                        aria-label="Find student account"
-                        value={adminSearch}
-                        onChange={(e) => setAdminSearch(e.target.value)}
-                        placeholder="Search name, student ID or email"
-                      />
-                    </label>
-                    <button className="button primary">Find student</button>
-                  </form>
-                  <div className="admin-users">
-                    {adminUsers.map((u) => (
-                      <div key={u.id}>
-                        <span className="avatar">
-                          {u.name.slice(0, 2).toUpperCase()}
-                        </span>
-                        <p>
-                          <strong>{u.name}</strong>
-                          <span>
-                            {u.student_id} · {hostelName(u.hostel)}
-                            <br />
-                            {locationText(u)}
-                            <br />
-                            {u.email}
-                          </span>
-                        </p>
-                        {u.role === "admin" ? (
-                          <span className="tag">Maintainer</span>
-                        ) : (
+              {view === "browse" && !hostel && (
+                <HostelLanding
+                  selectedHostel={rememberedHostel}
+                  onChoose={chooseHostel}
+                  onDemo={() => {
+                    setDemo(true);
+                    document
+                      .getElementById("hostel-choices")
+                      ?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                />
+              )}
+              {view === "browse" && hostel && (
+                <>
+                  <div className="stock-heading">
+                    <div>
+                      <span className="eyebrow orange">
+                        YOUR HOSTEL’S SNACK SCENE
+                      </span>
+                      <h1>{hostelName(hostel)}</h1>
+                      <p>
+                        Find what’s stocked. Compare prices. Head to the room.
+                      </p>
+                    </div>
+                  </div>
+                  {hostel === "mandakini" && (
+                    <>
+                      <PhaseNotice />
+                      <div
+                        className="phase-tabs"
+                        aria-label="Mandakini phase filters"
+                      >
+                        {[
+                          ["all", "All phases"],
+                          ["connected", "Phases 1 & 2"],
+                          ["3", "Phase 3"],
+                        ].map(([value, label]) => (
                           <button
-                            className="button ghost"
+                            key={value}
+                            className={phaseGroup === value ? "selected" : ""}
                             onClick={() => {
-                              setResetUser(u);
-                              setTemporaryPassword("");
-                              setModal("reset");
+                              setPhaseGroup(value);
+                              setWing("all");
                             }}
                           >
-                            Reset access
-                            <ArrowUpRight size={15} />
+                            {label}
+                            {value === "3" && <span>Separate access</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  <section className="directory" aria-label="Snack directory">
+                    <div className="section-top">
+                      <div>
+                        <span className="eyebrow orange">THE LOCAL SUPPLY</span>
+                        <h2>
+                          What’s in the stash<span className="orange">?</span>
+                        </h2>
+                      </div>
+                      <div className="live-count">
+                        <i />
+                        <strong>{activeSellers}</strong>{" "}
+                        {activeSellers === 1 ? "Stasher" : "Stashers"} open now
+                        <button
+                          className="icon-btn"
+                          aria-label="Refresh listings"
+                          onClick={() => action(refresh)}
+                          disabled={busy}
+                        >
+                          <RefreshCw size={15} className={busy ? "spin" : ""} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="search-row">
+                      <label className="search-box">
+                        <Search size={20} />
+                        <input
+                          aria-label="Search snacks, rooms or Stashers"
+                          placeholder="What are you craving? Try Oreo, Maggi, room 224..."
+                          value={query}
+                          onChange={(e) => setQuery(e.target.value)}
+                        />
+                        {query && (
+                          <button
+                            onClick={() => setQuery("")}
+                            aria-label="Clear search"
+                          >
+                            <X size={16} />
                           </button>
                         )}
+                      </label>
+                    </div>
+                    <div className="filter-row">
+                      <div className="categories" aria-label="Snack categories">
+                        {CATEGORIES.map((c, i) => (
+                          <button
+                            key={c}
+                            className={category === c ? "selected" : ""}
+                            onClick={() => setCategory(c)}
+                          >
+                            <span aria-hidden="true">
+                              {["✳", "◒", "◈", "♨", "◉"][i]}
+                            </span>
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="availability-filters">
+                        <label className="wing-select">
+                          <SlidersHorizontal size={17} />
+                          <select
+                            aria-label="Filter by wing"
+                            value={wing}
+                            onChange={(e) => setWing(e.target.value)}
+                          >
+                            <option value="all">All wings</option>
+                            {availableWings.map((w) => (
+                              <option key={w} value={w}>
+                                Wing {w}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                    <div className="results-row">
+                      <span>
+                        {loading
+                          ? "Checking the cupboards…"
+                          : `${groups.length} ${groups.length === 1 ? "snack" : "snacks"} worth staying up for`}
+                      </span>
+                      <label>
+                        Sort by{" "}
+                        <select
+                          aria-label="Sort listings"
+                          value={sort}
+                          onChange={(e) => setSort(e.target.value)}
+                        >
+                          <option value="popular">Most Stashers</option>
+                          <option value="price">Lowest price</option>
+                          <option value="name">Name A–Z</option>
+                        </select>
+                        <ChevronDown size={13} />
+                      </label>
+                    </div>
+                    {error && !demo ? (
+                      <div className="empty-state">
+                        <CircleHelp size={32} />
+                        <h3>Couldn’t check the stash.</h3>
+                        <p role="alert">{error}</p>
+                        <button
+                          className="button primary"
+                          onClick={() => {
+                            setLoading(true);
+                            refresh();
+                          }}
+                        >
+                          Try again
+                        </button>
+                      </div>
+                    ) : loading && !demo ? (
+                      <div className="product-grid">
+                        {[0, 1, 2].map((n) => (
+                          <div key={n} className="skeleton-card" />
+                        ))}
+                      </div>
+                    ) : groups.length ? (
+                      <div className="product-grid">
+                        {groups.map((g, i) => {
+                          const variants = groupVariants(g.offers),
+                            sellers = sellerCount(g.offers),
+                            lowest = startingPrice(g.offers),
+                            open = g.offers.some((o) => o.is_open),
+                            rooms = new Set(
+                              g.offers.map(
+                                (o) => `${o.phase || ""}|${o.wing}|${o.room}`,
+                              ),
+                            ).size;
+                          return (
+                            <button
+                              key={g.key}
+                              className="product-card"
+                              onClick={() => setSelected(g)}
+                              aria-label={`View ${g.name} · ${variants.length} pack options · ${sellers} sellers`}
+                            >
+                              <div className={`product-art tone-${i % 4}`}>
+                                <span className="pack-size">
+                                  {variants.length > 1
+                                    ? `${variants.length} pack options`
+                                    : variants[0]?.label}
+                                </span>
+                                {sellers > 1 && (
+                                  <span className="compare-badge">
+                                    <SlidersHorizontal size={12} />
+                                    {sellers} Stashers
+                                  </span>
+                                )}
+                                <PacketPhoto
+                                  item={
+                                    g.offers.find((o) => o.photo_id) ||
+                                    g.offers[0]
+                                  }
+                                />
+                              </div>
+                              <div className="product-info">
+                                <span className="product-category">
+                                  {g.category}
+                                </span>
+                                {g.offers.some(
+                                  (o) => o.photo_source === "openfoodfacts",
+                                ) && (
+                                  <small className="card-photo-credit">
+                                    Photo: Open Food Facts · CC BY-SA
+                                  </small>
+                                )}
+                                <h3>{g.name}</h3>
+                                <span className="product-options">
+                                  {variants.length > 1
+                                    ? `${variants.length} MRP / pack options`
+                                    : "Compare Stasher prices"}
+                                </span>
+                                {hostel === "mandakini" && (
+                                  <div className="phase-chips">
+                                    {Array.from(
+                                      new Set(g.offers.map((o) => o.phase)),
+                                    )
+                                      .sort()
+                                      .map((p) => (
+                                        <span
+                                          key={p}
+                                          className={
+                                            p === "3" ? "phase-three" : ""
+                                          }
+                                        >
+                                          Phase {p}
+                                        </span>
+                                      ))}
+                                  </div>
+                                )}
+                                <div className="product-price">
+                                  <span>
+                                    {(variants.length > 1 || sellers > 1) && (
+                                      <small>from </small>
+                                    )}
+                                    {money(lowest)}
+                                  </span>
+                                  <span className="product-arrow">
+                                    <ArrowUpRight size={20} />
+                                  </span>
+                                </div>
+                                <div className="product-meta">
+                                  <span>
+                                    <MapPin size={13} />
+                                    {rooms === 1
+                                      ? `Room ${g.offers[0].room} · ${g.offers[0].wing}`
+                                      : `${rooms} room locations`}
+                                  </span>
+                                  <span
+                                    className={open ? "in-stock" : "closed"}
+                                  >
+                                    <i />
+                                    {open ? "Available" : "Closed"}
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="empty-state">
+                        <div className="empty-icon">
+                          <Package size={33} />
+                        </div>
+                        <h3>
+                          {source.length
+                            ? "That craving is still out there."
+                            : "No stashes open right now."}
+                        </h3>
+                        <p>
+                          {source.length
+                            ? "Try another snack or wing."
+                            : "Check back later, or list your own stash for the hostel."}
+                        </p>
+                        <div className="empty-actions">
+                          <button
+                            className="button primary"
+                            onClick={
+                              source.length
+                                ? () => {
+                                    setQuery("");
+                                    setWing("all");
+                                    setCategory(CATEGORIES[0]);
+                                    setPhaseGroup("all");
+                                  }
+                                : sell
+                            }
+                          >
+                            {source.length
+                              ? "Clear filters"
+                              : "List your first snack"}
+                            <ArrowUpRight size={16} />
+                          </button>
+                          {!source.length && !demo && (
+                            <button
+                              className="button ghost"
+                              onClick={startDemo}
+                            >
+                              Explore a demo
+                              <ArrowRight size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div className="directory-footnote">
+                      <Clock3 size={14} />
+                      <span>
+                        Fresh stock, less guesswork. Listings hide after 24
+                        hours without a Stasher update.
+                      </span>
+                    </div>
+                  </section>
+                  <section className="how-strip">
+                    {[
+                      [
+                        "01",
+                        "Find your fix.",
+                        "Search snacks across the hostel.",
+                      ],
+                      [
+                        "02",
+                        "Pick your room.",
+                        "Compare the same pack, fairly.",
+                      ],
+                      [
+                        "03",
+                        "Walk. Pay. Munch.",
+                        "Settle up directly with the Stasher.",
+                      ],
+                    ].map(([n, t, p]) => (
+                      <div key={n}>
+                        <span>{n}</span>
+                        <p>
+                          <strong>{t}</strong>
+                          {p}
+                        </p>
                       </div>
                     ))}
-                    {!adminUsers.length && <p>No matching student accounts.</p>}
+                  </section>
+                  <Hero onSell={sell} />
+                </>
+              )}
+              {view === "pawn" &&
+                pawnSection === "maintainer" &&
+                (user?.role === "admin" ? (
+                  <MaintainerWorkspace experience="pawn" onChanged={refresh} />
+                ) : (
+                  <section className="pawn-settings">
+                    <h1>Maintainer access</h1>
+                    <p>
+                      {loading
+                        ? "Opening the maintainer desk..."
+                        : "This area is available to campus maintainers."}
+                    </p>
+                    {!user && !loading && (
+                      <button
+                        className="button pawn-primary"
+                        onClick={() => {
+                          setAuthReturn("pawn");
+                          setAuthTab("login");
+                          setModal("auth");
+                        }}
+                      >
+                        Log in
+                      </button>
+                    )}
+                  </section>
+                ))}
+              {view === "pawn" && pawnSection !== "maintainer" && (
+                <PawnShop
+                  searchAliases={site.searchAliases}
+                  user={user}
+                  section={pawnSection}
+                  onSection={pawnPane}
+                  onLogin={() => {
+                    setAuthReturn("pawn");
+                    setAuthTab("login");
+                    setModal("auth");
+                  }}
+                  onProfile={() =>
+                    setModal(
+                      user?.must_change_password ? "password" : "profile",
+                    )
+                  }
+                />
+              )}
+              {view === "stash" && user && (
+                <section className="dashboard">
+                  <div className="dashboard-heading">
+                    <div>
+                      <span className="eyebrow orange">
+                        {hostelName(user.hostel)} · {locationText(user)}
+                      </span>
+                      <h1>
+                        Your stash.
+                        <br />
+                        <em>Your little empire.</em>
+                      </h1>
+                      <p>Keep your stock fresh. Keep your neighbours fed.</p>
+                    </div>
+                    <button
+                      className="button primary"
+                      onClick={() => setModal("add")}
+                    >
+                      <Plus size={18} />
+                      Add a snack
+                    </button>
                   </div>
+                  <div
+                    className={`stock-status-panel ${user.shop_sleeping || !user.is_open ? "status-paused" : now - user.confirmed_at >= 86400000 ? "status-stale" : "status-live"}`}
+                  >
+                    <div className="stock-status-icon">
+                      {user.shop_sleeping || !user.is_open ? (
+                        <Moon size={21} />
+                      ) : (
+                        <Clock3 size={21} />
+                      )}
+                    </div>
+                    <div>
+                      <strong>
+                        {user.shop_sleeping || !user.is_open
+                          ? "Your shop is resting"
+                          : now - user.confirmed_at >= 86400000
+                            ? "Time for a stock check"
+                            : "Your stash is live"}
+                      </strong>
+                      <p>
+                        {user.shop_sleeping || !user.is_open
+                          ? "Your items are hidden. Reopen from the header when you’re ready."
+                          : now - user.confirmed_at >= 86400000
+                            ? "Review your items to show your stash again."
+                            : `Stock checked ${relative(user.confirmed_at)}.`}
+                      </p>
+                    </div>
+                    <button
+                      className="button ghost"
+                      onClick={() => setModal("confirm")}
+                    >
+                      <Check size={16} />
+                      Review stock
+                    </button>
+                  </div>
+                  <SellerPayments onChanged={refresh} />
+                  <div className="stash-heading">
+                    <h2>{own.length} snacks in your cupboard</h2>
+                  </div>
+                  {own.length ? (
+                    <div className="own-list">
+                      {own.map((item) => (
+                        <OwnRow
+                          key={item.id}
+                          item={item}
+                          busy={busy}
+                          onEdit={() => setEditing(item)}
+                          onSave={(price, available) =>
+                            action(async () => {
+                              await api(`mine/${item.id}`, "PUT", {
+                                price,
+                                available,
+                              });
+                              await loadOwn();
+                              setToast("Stash updated.");
+                            })
+                          }
+                          onDelete={() =>
+                            action(async () => {
+                              await api(`mine/${item.id}`, "DELETE");
+                              await loadOwn();
+                              setToast("Listing removed.");
+                            })
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="empty-state">
+                      <Package size={36} />
+                      <h3>An empty cupboard has potential.</h3>
+                      <p>
+                        Add your first item and let your neighbours know what is
+                        available.
+                      </p>
+                      <button
+                        className="button primary"
+                        onClick={() => setModal("add")}
+                      >
+                        <Plus size={16} />
+                        Add a snack
+                      </button>
+                    </div>
+                  )}
                 </section>
-              }
-            />
-          )}
-          {view === "pawn" ? (
-            <footer className="main-footer pawn-footer">
-              <span className="footer-brand">The Pawn Shop</span>
-              <span>Good things. Second chapters.</span>
-              <button onClick={() => navigate("browse")}>
-                Back to StashBox
-                <ArrowRight size={14} />
-              </button>
-              <button onClick={() => setModal("help")}>
-                Shop help & support
-                <ArrowUpRight size={13} />
-              </button>
-            </footer>
-          ) : (
-            <footer className="main-footer">
-              <span className="footer-brand">
-                stashbox<sup>®</sup>
-              </span>
-              <span>
-                A little hostel hustle. A lot of late-night happiness.
-              </span>
-              <button onClick={() => setModal("help")}>
-                Help & support
-                <ArrowUpRight size={13} />
-              </button>
-            </footer>
+              )}
+              {view === "admin" && user && user.role !== "admin" && (
+                <section className="empty-state">
+                  <ShieldCheck size={34} />
+                  <h1>Maintainer access</h1>
+                  <p>This section is available to campus maintainers.</p>
+                  <button
+                    className="button primary"
+                    onClick={() => navigate("browse")}
+                  >
+                    Back to snacks
+                  </button>
+                </section>
+              )}
+              {view === "admin" && user?.role === "admin" && (
+                <MaintainerWorkspace
+                  experience="stashbox"
+                  onChanged={refresh}
+                  accountTools={
+                    <section className="admin-users-tool">
+                      <h2>Account recovery</h2>
+                      <form
+                        className="admin-search"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          loadAdmin();
+                        }}
+                      >
+                        <label className="search-box">
+                          <Search size={19} />
+                          <input
+                            aria-label="Find student account"
+                            value={adminSearch}
+                            onChange={(e) => setAdminSearch(e.target.value)}
+                            placeholder="Search name, student ID or email"
+                          />
+                        </label>
+                        <button className="button primary">Find student</button>
+                      </form>
+                      <div className="admin-users">
+                        {adminUsers.map((u) => (
+                          <div key={u.id}>
+                            <span className="avatar">
+                              {u.name.slice(0, 2).toUpperCase()}
+                            </span>
+                            <p>
+                              <strong>{u.name}</strong>
+                              <span>
+                                {u.student_id} · {hostelName(u.hostel)}
+                                <br />
+                                {locationText(u)}
+                                <br />
+                                {u.email}
+                              </span>
+                            </p>
+                            {u.role === "admin" ? (
+                              <span className="tag">Maintainer</span>
+                            ) : (
+                              <button
+                                className="button ghost"
+                                onClick={() => {
+                                  setResetUser(u);
+                                  setTemporaryPassword("");
+                                  setModal("reset");
+                                }}
+                              >
+                                Reset access
+                                <ArrowUpRight size={15} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        {!adminUsers.length && (
+                          <p>No matching student accounts.</p>
+                        )}
+                      </div>
+                    </section>
+                  }
+                />
+              )}
+              {view === "pawn" ? (
+                <footer className="main-footer pawn-footer">
+                  <span className="footer-brand">The Pawn Shop</span>
+                  <span>Good things. Second chapters.</span>
+                  <button onClick={() => navigate("browse")}>
+                    Back to StashBox
+                    <ArrowRight size={14} />
+                  </button>
+                  <button onClick={() => setModal("help")}>
+                    Shop help & support
+                    <ArrowUpRight size={13} />
+                  </button>
+                </footer>
+              ) : (
+                <footer className="main-footer">
+                  <span className="footer-brand">
+                    stashbox<sup>®</sup>
+                  </span>
+                  <span>
+                    A little hostel hustle. A lot of late-night happiness.
+                  </span>
+                  <button onClick={() => setModal("help")}>
+                    Help & support
+                    <ArrowUpRight size={13} />
+                  </button>
+                </footer>
+              )}
+            </>
           )}
         </main>
       </div>
@@ -1717,7 +1855,7 @@ export default function Home({
               Bhawan, Wing 9, Room 224, or send a message on WhatsApp.
             </p>
             <p>
-              Your current password is never visible to the moderator. After
+              Your current password is never visible to the maintainer. After
               checking your identity, Punyam will issue a new temporary
               password. Use it to log in and choose your own new password.
             </p>
@@ -1793,11 +1931,11 @@ export default function Home({
                   await refresh();
                   setModal("");
                   if (view === "pawn") {
-                    setPawnSection("moderator");
-                    history.replaceState(null, "", pawnUrl("moderator"));
+                    setPawnSection("maintainer");
+                    history.replaceState(null, "", pawnUrl("maintainer"));
                   } else {
                     setView("admin");
-                    history.replaceState(null, "", "/moderator");
+                    history.replaceState(null, "", "/maintainer");
                   }
                   setToast("Maintainer account activated.");
                 });

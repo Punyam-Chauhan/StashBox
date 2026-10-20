@@ -206,3 +206,10 @@ export const campusHostels = sqliteTable(
   },
   (t) => [uniqueIndex("campus_hostels_name_unique").on(sql`lower(${t.name})`)],
 );
+
+export const siteSettings = sqliteTable("site_settings", {
+  id: integer("id").primaryKey(),
+  value: text("value").notNull(),
+  revision: integer("revision").notNull().default(0),
+  updatedAt: integer("updated_at").notNull().default(0),
+});

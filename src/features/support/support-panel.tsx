@@ -122,10 +122,10 @@ export function SupportPanel({
             <br />
             <em>neighbourhood</em>
             <br />
-            moderator.
+            maintainer.
           </h3>
           <p className="support-name">
-            Punyam Chauhan<span>Your campus moderator</span>
+            Punyam Chauhan<span>Your campus maintainer</span>
           </p>
         </div>
       </div>
