@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { type User } from "../domain/shared";
+import { isStaff } from "../domain/permissions";
 import {
   PawnAppSwitch,
   PawnSidebar,
@@ -60,7 +61,7 @@ export function Sidebar({
       </button>
       {view === "pawn" ? (
         <PawnSidebar
-          isMaintainer={user?.role === "admin"}
+          isMaintainer={isStaff(user)}
           section={pawnSection}
           onSection={onPawnSection}
           onBack={() => onNavigate("browse")}
@@ -123,13 +124,13 @@ export function Sidebar({
               <CircleHelp size={19} />
               How it works
             </button>
-            {user?.role === "admin" && (
+            {isStaff(user) && (
               <button
                 className={`nav-item ${view === "admin" ? "active" : ""}`}
                 onClick={() => onNavigate("admin")}
               >
                 <ShieldCheck size={19} />
-                Maintainer
+                {user?.role === "vice" ? "Vice-Maintainer" : "Maintainer"}
               </button>
             )}
           </nav>

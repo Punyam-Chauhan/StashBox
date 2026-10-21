@@ -1,3 +1,4 @@
+import { testStudentId } from "./helpers/identity.mjs";
 import { chromium, browserExecutable } from "./helpers/browser.mjs";
 
 import assert from "node:assert/strict";
@@ -133,6 +134,9 @@ try {
     .fill("QA Browser Student");
   await dialog
     .getByRole("textbox", { name: "Student ID", exact: true })
+    .fill(testStudentId(run));
+  await dialog
+    .getByRole("textbox", { name: "Username", exact: true })
     .fill(run);
   await dialog
     .getByRole("textbox", { name: "Email address", exact: true })
@@ -216,7 +220,7 @@ try {
       const me = await (
         await context.request.get("http://127.0.0.1:5173/api/me")
       ).json();
-      if (me.user?.student_id === run) fixtureId = me.user.id;
+      if (me.user?.student_id === testStudentId(run)) fixtureId = me.user.id;
     } catch {}
   }
   if (fixtureId) {

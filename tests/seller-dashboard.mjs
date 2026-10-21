@@ -1,3 +1,4 @@
+import { testStudentId } from "./helpers/identity.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 const base = "http://127.0.0.1:5173",
@@ -51,7 +52,8 @@ async function signup(suffix) {
   const r = await api("signup", "POST", {
     name: "Book Tester",
     email: run + suffix + "@example.test",
-    studentId: run + suffix,
+    studentId: testStudentId(run + suffix),
+    username: run + suffix,
     phone: "9000000000",
     password: "Test-password-482!",
     hostel: "patel",

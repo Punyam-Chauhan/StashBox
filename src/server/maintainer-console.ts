@@ -1,4 +1,5 @@
 import type { ImageBucket } from "./object-store";
+import { hasPermission, isStaff } from "../domain/permissions";
 import { checkContent } from "./content-policy";
 import { libraryPhoto, photoGroup } from "../domain/packet-library";
 import {
@@ -22,7 +23,7 @@ export async function maintainerConsole(
   const json = (v: any, status = 200) =>
     Response.json(v, { status, headers: { "Cache-Control": "no-store" } });
   if (!user) return json({ error: "Log in to continue." }, 401);
-  if (user.role !== "admin" || user.must_change_password)
+  if (!isStaff(user))
     return json({ error: "Maintainer access required." }, 403);
   const pawnOnly = path === "pawn/admin/review",
     stashOnly =
@@ -99,15 +100,18 @@ export async function maintainerConsole(
         limit: MAX_STORAGE_BYTES,
         max_photo: MAX_IMAGE_BYTES,
       },
-      snacks: snacks.map((s) => ({
+      snacks: (hasPermission(user, "listings") ? snacks : []).map((s) => ({
         ...s,
         missing_photo: !s.photo_id,
         user_photo: s.photo_source === "seller",
       })),
-      products: products.map((p) => ({ ...p, missing_photo: !p.photo_id })),
-      photos,
-      pawn,
-      qrs,
+      products: (hasPermission(user, "catalogue") ? products : []).map((p) => ({
+        ...p,
+        missing_photo: !p.photo_id,
+      })),
+      photos: hasPermission(user, "uploads") ? photos : [],
+      pawn: hasPermission(user, "listings") ? pawn : [],
+      qrs: hasPermission(user, "uploads") ? qrs : [],
     });
   }
   if (!["PUT", "DELETE"].includes(req.method))
@@ -128,6 +132,17 @@ export async function maintainerConsole(
   )
     return json({ error: "Choose an item from this marketplace." }, 400);
   const [table, status, key] = config[b.kind];
+  const permission =
+    b.kind === "product"
+      ? "catalogue"
+      : ["photo", "qr"].includes(b.kind)
+        ? "uploads"
+        : "listings";
+  if (!hasPermission(user, permission))
+    return json(
+      { error: "You do not have permission to manage this item." },
+      403,
+    );
   let row = await db
     .prepare(`SELECT * FROM ${table} WHERE ${key}=?`)
     .bind(b.id)

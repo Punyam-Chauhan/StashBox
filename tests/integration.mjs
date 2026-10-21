@@ -1,3 +1,4 @@
+import { testStudentId } from "./helpers/identity.mjs";
 // Runs against the local preview only. Creates synthetic accounts and removes them.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -66,7 +67,8 @@ async function signup(suffix, room = "224", location = home) {
   const r = await call("signup", "POST", {
     name: `QA Student ${suffix}`,
     email: `${run}${suffix}@example.test`,
-    studentId: `${run}${suffix}`,
+    studentId: testStudentId(`${run}${suffix}`),
+    username: `${run}${suffix}`,
     phone: "9000000000",
     ...location,
     room,
@@ -101,7 +103,8 @@ try {
       await call("signup", "POST", {
         name: "Other",
         email: `${run}a@example.test`,
-        studentId: `${run}new`,
+        studentId: testStudentId(`${run}new`),
+        username: `${run}new`,
         phone: "9000000000",
         ...home,
         password: "Test-password-482!",
@@ -126,7 +129,7 @@ try {
   check(
     (
       await call("login", "POST", {
-        identifier: `${run}a`,
+        identifier: a.user.student_id,
         password: "Test-password-482!",
       })
     ).status === 200,

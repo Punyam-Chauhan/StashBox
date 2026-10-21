@@ -209,6 +209,7 @@ export type User = {
   name: string;
   email: string;
   student_id: string;
+  username?: string;
   phone: string;
   room: string;
   hostel: string | null;
@@ -217,6 +218,7 @@ export type User = {
   show_phone: number;
   is_open: number;
   role: string;
+  permissions?: string | string[];
   must_change_password: number;
   confirmed_at: number;
 };
@@ -239,6 +241,7 @@ export type Listing = Photo &
     available: number;
     seller_id: string;
     seller_name: string;
+    seller_username?: string;
     room: string;
     hostel: string;
     wing: string;

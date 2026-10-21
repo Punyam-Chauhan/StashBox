@@ -9,6 +9,7 @@ import {
 import { locationText, money, type Listing } from "../../domain/shared";
 import { PaymentQR } from "../payments/payment-qr";
 import { PriceDetails } from "./pricing-fields";
+import { ReportButton } from "../moderation/report-button";
 
 export function relative(time: number) {
   const m = Math.max(0, Math.floor((Date.now() - time) / 60000));
@@ -73,6 +74,11 @@ export function CompareOffers({
                       </span>
                       <div className="offer-person">
                         <strong>{o.seller_name}</strong>
+                        {o.seller_username && (
+                          <small className="seller-handle">
+                            @{o.seller_username}
+                          </small>
+                        )}
                         <span>{locationText(o)}</span>
                       </div>
                     </div>
@@ -115,6 +121,19 @@ export function CompareOffers({
                           </span>
                         )}
                       </div>
+                    </div>
+                    <div className="offer-report-actions">
+                      <ReportButton
+                        kind="snack"
+                        targetId={o.id}
+                        targetLabel={o.name}
+                        label="Report listing"
+                      />
+                      <ReportButton
+                        targetId={o.seller_id}
+                        username={o.seller_username}
+                        targetLabel={o.seller_name}
+                      />
                     </div>
                   </article>
                 );

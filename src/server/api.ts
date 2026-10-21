@@ -1,4 +1,13 @@
 import { imageBucket } from "./object-store";
+import { communitySafety } from "./community-safety";
+import {
+  hasPermission,
+  permissionsOf,
+  isStaff,
+  validStudentId,
+  validUsername,
+  type StaffPermission,
+} from "../domain/permissions";
 import { ValidationError } from "../domain/validation-error";
 import { crossSiteWrite, requestBodyLimit } from "./request-security";
 import { withContentPolicy } from "./content-policy";
@@ -175,7 +184,7 @@ function equal(a: string, b: string) {
   return diff === 0;
 }
 const safeColumns =
-  "u.shop_sleeping,u.upi_qr_id,u.id,u.name,u.email,u.student_id,u.phone,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,u.show_phone,u.is_open,u.role,u.must_change_password,u.confirmed_at";
+  "u.username,u.permissions,u.shop_sleeping,u.upi_qr_id,u.id,u.name,u.email,u.student_id,u.phone,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,u.show_phone,u.is_open,u.role,u.must_change_password,u.confirmed_at";
 async function currentUser(req: Request, required = true) {
   const token = req.headers
     .get("cookie")
@@ -183,7 +192,7 @@ async function currentUser(req: Request, required = true) {
   const user = token
     ? await db()
         .prepare(
-          `SELECT ${safeColumns} FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>?`,
+          `SELECT ${safeColumns} FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=? AND s.expires_at>? AND u.deletion_pending=0 AND u.blocked=0`,
         )
         .bind(await digest(token), Date.now())
         .first<any>()
@@ -197,9 +206,10 @@ async function seller(req: Request) {
     fail(403, "Set your own password before continuing.");
   return user;
 }
-async function admin(req: Request) {
+async function admin(req: Request, permission?: StaffPermission) {
   const user = await seller(req);
-  if (user.role !== "admin") fail(403, "Maintainer access is required.");
+  if (permission ? !hasPermission(user, permission) : user.role !== "admin")
+    fail(403, "You do not have permission for this Maintainer tool.");
   return user;
 }
 function sessionCookie(req: Request, token: string, age = 604800) {
@@ -267,26 +277,54 @@ async function body(req: Request) {
 async function handle(req: Request) {
   const url = new URL(req.url),
     path = url.pathname.replace(/^\/api\//, "");
+  if (
+    path === "reports" ||
+    path.startsWith("admin/notifications") ||
+    [
+      "admin/reports",
+      "admin/account",
+      "admin/account-role",
+      "admin/account-id",
+      "admin/account-block",
+    ].includes(path)
+  ) {
+    const user = await currentUser(req, false);
+    if (req.method !== "GET")
+      await rate(
+        req,
+        path === "reports" ? "reports" : "staff-safety",
+        path === "reports" ? 8 : 60,
+        path === "reports" ? DAY : 15 * 60000,
+        user?.id || "",
+      );
+    const response = await communitySafety(req, path, {
+      db: db(),
+      bucket: imageBucket(env),
+      user,
+      body: () => body(req),
+    });
+    if (response) return response;
+  }
   if (path === "admin/site") {
-    const actor = await admin(req);
+    const actor = await admin(req, "site");
     if (req.method !== "GET") await rate(req, "site-controls", 60);
     return siteControls(req, db(), actor, () => body(req));
   }
   if (path === "admin/activity" && req.method === "GET")
-    return siteActivity(db(), await admin(req));
+    return siteActivity(db(), await admin(req, "activity"));
   if (path === "hostels" && req.method === "GET")
     return json({ hostels: await hostelDirectory(db()) });
   if (
     path.startsWith("admin/hostels") &&
     !(path === "admin/hostels" && req.method === "POST")
   ) {
-    const actor = await admin(req);
+    const actor = await admin(req, "hostels");
     if (req.method !== "GET") await rate(req, "hostel-manage", 60);
 
     return await manageHostels(req, path, db(), actor, () => body(req));
   }
   if (path === "admin/hostels" && req.method === "POST") {
-    const actor = await admin(req);
+    const actor = await admin(req, "hostels");
     await rate(req, "hostel-create", 20);
     const b = await body(req);
     let name;
@@ -373,7 +411,8 @@ async function handle(req: Request) {
       await photos().choices(
         name,
         category,
-        (await currentUser(req, false))?.role === "admin",
+        hasPermission(await currentUser(req, false), "catalogue") ||
+          hasPermission(await currentUser(req, false), "uploads"),
       ),
     );
   }
@@ -405,7 +444,7 @@ async function handle(req: Request) {
     if (name.length < 2 || !CATEGORIES.slice(1).includes(category))
       fail(400, "Enter the product name and category before uploading.");
     if (
-      user.role !== "admin" &&
+      !hasPermission(user, "catalogue") &&
       (await photos().choices(name, category)).defaultPhoto
     )
       fail(
@@ -413,12 +452,11 @@ async function handle(req: Request) {
         "This product already has a shared photo. Only the maintainer can change it.",
       );
     const photo = await photos().store(bytes, {
-      source: user.role === "admin" ? "maintainer" : "seller",
+      source: hasPermission(user, "catalogue") ? "maintainer" : "seller",
       sourceUrl: null,
-      credit:
-        user.role === "admin"
-          ? "Maintainer photo"
-          : "Stasher photo - shared with permission",
+      credit: hasPermission(user, "catalogue")
+        ? "Maintainer photo"
+        : "Stasher photo - shared with permission",
       license: null,
       name,
       category,
@@ -450,7 +488,11 @@ async function handle(req: Request) {
       .first<any>();
     if (row && row.review_status !== "approved") {
       const viewer = await currentUser(req, false);
-      if (viewer?.id !== row.uploaded_by && viewer?.role !== "admin")
+      if (
+        viewer?.id !== row.uploaded_by &&
+        !hasPermission(viewer, "uploads") &&
+        !hasPermission(viewer, "catalogue")
+      )
         fail(404, "Photo not found.");
     }
     const bucket = imageBucket(env);
@@ -500,11 +542,11 @@ async function handle(req: Request) {
       fail(400, "Choose a hostel to see its listings.");
     const rows = await db()
       .prepare(
-        `SELECT l.id,l.product_key,l.name,l.size,l.container,l.volume_ml,l.mrp,l.moderation_status,l.category,l.price,l.price_after,l.price_until,l.usual_price,l.offer_text,l.available,l.seller_id,${photoColumns},
+        `SELECT u.username AS seller_username,l.id,l.product_key,l.name,l.size,l.container,l.volume_ml,l.mrp,l.moderation_status,l.category,l.price,l.price_after,l.price_until,l.usual_price,l.offer_text,l.available,l.seller_id,${photoColumns},
       u.name AS seller_name,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,u.hostel,u.wing,u.phase,
       CASE WHEN u.show_phone=1 AND u.is_open=1 AND u.shop_sleeping=0 THEN u.phone ELSE NULL END AS phone,CASE WHEN u.shop_sleeping=0 AND u.is_open=1 THEN 1 ELSE 0 END AS is_open,u.confirmed_at,CASE WHEN qr.status='approved' AND u.is_open=1 AND u.shop_sleeping=0 THEN u.upi_qr_id ELSE NULL END AS upi_qr_id
       FROM listings l JOIN users u ON u.id=l.seller_id LEFT JOIN market_media qr ON qr.id=u.upi_qr_id ${photoJoins}
-      WHERE u.shop_sleeping=0 AND u.is_open=1 AND l.moderation_status='approved' AND l.available=1 AND u.confirmed_at>? AND u.hostel=? AND u.wing IS NOT NULL
+      WHERE u.blocked=0 AND u.deletion_pending=0 AND u.shop_sleeping=0 AND u.is_open=1 AND l.moderation_status='approved' AND l.available=1 AND u.confirmed_at>? AND u.hostel=? AND u.wing IS NOT NULL
       AND (u.hostel!='mandakini' OR u.phase IN ('1','2','3')) ORDER BY l.price,l.id`,
       )
       .bind(Date.now() - DAY, hostel)
@@ -526,9 +568,19 @@ async function handle(req: Request) {
       name = str(b.name, 60),
       email = str(b.email, 120).toLowerCase(),
       studentId = str(b.studentId, 40).toLowerCase(),
+      username =
+        typeof b.username === "string" ? b.username.trim().toLowerCase() : "",
       phone = str(b.phone, 20).replace(/[\s()-]/g, "");
     const location = await parseLocation(b),
       password = validatePassword(b.password);
+    if (
+      !validUsername(username) ||
+      ["punyam", "admin", "maintainer", "support", "system"].includes(username)
+    )
+      fail(
+        400,
+        "Choose a unique username: 3–24 lowercase letters, numbers or underscores, starting with a letter. Staff names are reserved.",
+      );
     try {
       asciiText(b.name, "Name", 60);
       asciiText(b.email, "Email", 120);
@@ -539,18 +591,23 @@ async function handle(req: Request) {
     if (
       name.length < 2 ||
       !/^\S+@\S+\.\S+$/.test(email) ||
-      !/^[-a-z0-9_/.]{3,40}$/.test(studentId) ||
+      !validStudentId(studentId) ||
       !/^\+?\d{10,15}$/.test(phone)
     )
-      fail(400, "Check your name, email, student ID and phone number.");
+      fail(
+        400,
+        "Check your name, email and phone. Student ID must be exactly five digits.",
+      );
     const existing = await db()
-      .prepare("SELECT id FROM users WHERE email=? OR student_id=?")
-      .bind(email, studentId)
+      .prepare(
+        "SELECT id FROM users WHERE email=? OR student_id=? OR lower(username)=?",
+      )
+      .bind(email, studentId, username)
       .first();
     if (existing)
       fail(
         409,
-        "That email or student ID is already registered. Try logging in.",
+        "That email, student ID or username is already registered. Try logging in or choose another username.",
       );
     const id = crypto.randomUUID(),
       salt = randomToken(16),
@@ -558,13 +615,14 @@ async function handle(req: Request) {
     try {
       const inserted = await db()
         .prepare(
-          "INSERT INTO users (id,name,email,student_id,phone,room,room_label,hostel,wing,phase,password_hash,salt,show_phone,is_open,role,must_change_password,confirmed_at,created_at) SELECT ?,?,?,?,?,0,?,?,?,?,?,?,0,1,'seller',0,?,? WHERE EXISTS(SELECT 1 FROM campus_hostels WHERE id=?)",
+          "INSERT INTO users (id,name,email,student_id,username,phone,room,room_label,hostel,wing,phase,password_hash,salt,show_phone,is_open,role,must_change_password,confirmed_at,created_at) SELECT ?,?,?,?,?,?,0,?,?,?,?,?,?,0,1,'seller',0,?,? WHERE EXISTS(SELECT 1 FROM campus_hostels WHERE id=?)",
         )
         .bind(
           id,
           name,
           email,
           studentId,
+          username,
           phone,
           location.room,
           location.hostel,
@@ -584,21 +642,21 @@ async function handle(req: Request) {
         );
     } catch (e) {
       if (String(e).includes("UNIQUE"))
-        fail(409, "That email or student ID is already registered.");
+        fail(409, "That email, student ID or username is already registered.");
       throw e;
     }
     return loginResponse(req, id);
   }
   if (path === "login" && req.method === "POST") {
     const b = await body(req),
-      identifier = str(b.identifier, 120).toLowerCase();
+      identifier = str(b.identifier, 120).toLowerCase().replace(/^@/, "");
     await rate(req, "login", 30);
     await rate(req, "login-account", 10, 15 * 60000, identifier);
     const user = await db()
       .prepare(
-        "SELECT id,password_hash,salt FROM users WHERE email=? OR student_id=?",
+        "SELECT id,password_hash,salt FROM users WHERE (email=? OR student_id=? OR lower(username)=?) AND deletion_pending=0 AND blocked=0",
       )
-      .bind(identifier, identifier)
+      .bind(identifier, identifier, identifier)
       .first<any>();
     const password =
       typeof b.password === "string" ? b.password.slice(0, 128) : "";
@@ -925,7 +983,7 @@ async function handle(req: Request) {
     // Atomic guard: only one initial administrator can ever be provisioned here.
     const result = await db()
       .prepare(
-        "UPDATE users SET role='admin' WHERE id=? AND NOT EXISTS(SELECT 1 FROM users WHERE role='admin')",
+        "UPDATE users SET role='admin',username='punyam' WHERE id=? AND NOT EXISTS(SELECT 1 FROM users WHERE role='admin')",
       )
       .bind(user.id)
       .run();
@@ -934,11 +992,11 @@ async function handle(req: Request) {
     return json({ ok: true });
   }
   if (path === "admin/photos" && req.method === "GET") {
-    await admin(req);
+    await admin(req, "catalogue");
     return json({ products: await photos().directory(true) });
   }
   if (path === "admin/products" && req.method === "POST") {
-    await admin(req);
+    await admin(req, "catalogue");
     const b = await body(req),
       name = str(b.name, 70),
       category = str(b.category, 40);
@@ -954,7 +1012,7 @@ async function handle(req: Request) {
     return json({ ok: true });
   }
   if (path === "admin/products" && req.method === "PUT") {
-    const actor = await admin(req),
+    const actor = await admin(req, "catalogue"),
       b = await body(req),
       oldName = str(b.name, 70),
       category = str(b.category, 40);
@@ -1125,7 +1183,7 @@ async function handle(req: Request) {
     return json({ ok: true, name: name! });
   }
   if (path === "admin/photos" && req.method === "PUT") {
-    const user = await admin(req),
+    const user = await admin(req, "catalogue"),
       b = await body(req),
       name = str(b.name, 70),
       category = str(b.category, 40),
@@ -1137,33 +1195,43 @@ async function handle(req: Request) {
     return json({ ok: true });
   }
   if (path === "admin/users" && req.method === "GET") {
-    await admin(req);
+    await admin(req, "accounts");
     const search = str(url.searchParams.get("search"), 120).replace(
       /[%_\\]/g,
       "",
     );
     const users = await db()
       .prepare(
-        "SELECT id,name,email,student_id,COALESCE(room_label,CAST(room AS TEXT)) AS room,hostel,wing,phase,role FROM users WHERE name LIKE ? OR email LIKE ? OR student_id LIKE ? ORDER BY created_at DESC LIMIT 50",
+        "SELECT id,name,email,student_id,username,blocked,blocked_reason,COALESCE(room_label,CAST(room AS TEXT)) AS room,hostel,wing,phase,role,permissions,deletion_pending FROM users WHERE name LIKE ? OR email LIKE ? OR student_id LIKE ? OR username LIKE ? ORDER BY created_at DESC LIMIT 50",
       )
-      .bind(`%${search}%`, `%${search}%`, `%${search}%`)
+      .bind(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`)
       .all();
     return json({ users: users.results });
   }
   if (path === "admin/reset" && req.method === "POST") {
-    const maintainer = await admin(req);
+    const maintainer = await admin(req, "reset_access");
     await rate(req, "admin-reset", 12);
     const b = await body(req),
       target = str(b.userId, 50);
     if (b.identityChecked !== true)
       fail(400, "Confirm that you checked the student's identity in person.");
     const user = await db()
-      .prepare("SELECT id,role FROM users WHERE id=?")
+      .prepare(
+        "SELECT id,role,permissions,deletion_pending FROM users WHERE id=?",
+      )
       .bind(target)
       .first<any>();
     if (!user) fail(404, "Student not found.");
-    if (user.role === "admin")
-      fail(400, "Maintainer accounts cannot be reset here.");
+    if (
+      user.role === "admin" ||
+      user.id === maintainer.id ||
+      user.deletion_pending ||
+      (maintainer.role !== "admin" &&
+        permissionsOf(user).some(
+          (p) => !hasPermission(maintainer, p as StaffPermission),
+        ))
+    )
+      fail(400, "This staff account cannot be reset here.");
     const password = `Stash-${randomToken(9)}`,
       salt = randomToken(16);
     await db().batch([
@@ -1224,7 +1292,7 @@ async function route(req: Request) {
     if (path === "site" && req.method === "GET")
       return publicSiteResponse(settings);
     const actor = await currentUser(req, false),
-      maintainer = actor?.role === "admin" && !actor.must_change_password;
+      maintainer = isStaff(actor);
     const recoveryPaths = [
       "me",
       "hostels",

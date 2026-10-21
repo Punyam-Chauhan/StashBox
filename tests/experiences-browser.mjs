@@ -1,3 +1,4 @@
+import { testStudentId } from "./helpers/identity.mjs";
 import { chromium, browserExecutable } from "./helpers/browser.mjs";
 
 import { spawnSync } from "node:child_process";
@@ -46,7 +47,8 @@ async function signup(context, suffix) {
     data: {
       name: "Experience Tester " + suffix,
       email: run + suffix + "@example.test",
-      studentId: run + suffix,
+      studentId: testStudentId(run + suffix),
+      username: run + suffix,
       phone: "9000000000",
       password: "Test-password-482!",
       hostel: "patel",

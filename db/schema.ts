@@ -5,6 +5,8 @@ import {
   integer,
   index,
   uniqueIndex,
+  primaryKey,
+  check,
 } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable(
@@ -14,6 +16,9 @@ export const users = sqliteTable(
     name: text("name").notNull(),
     email: text("email").notNull().unique(),
     studentId: text("student_id").notNull().unique(),
+    username: text("username"),
+    blocked: integer("blocked").notNull().default(0),
+    blockedReason: text("blocked_reason").notNull().default(""),
     phone: text("phone").notNull(),
     room: integer("room").notNull(),
     // Preserve the old numeric room column; new locations are entered as text.
@@ -28,6 +33,8 @@ export const users = sqliteTable(
     isOpen: integer("is_open").notNull().default(1),
     shopSleeping: integer("shop_sleeping").notNull().default(0),
     role: text("role").notNull().default("seller"),
+    permissions: text("permissions").notNull().default("[]"),
+    deletionPending: integer("deletion_pending").notNull().default(0),
     mustChangePassword: integer("must_change_password").notNull().default(0),
     confirmedAt: integer("confirmed_at").notNull(),
     createdAt: integer("created_at").notNull(),
@@ -35,6 +42,7 @@ export const users = sqliteTable(
   (t) => [
     index("users_confirmed").on(t.confirmedAt),
     index("users_hostel_confirmed").on(t.hostel, t.confirmedAt),
+    uniqueIndex("users_username_unique").on(sql`lower(${t.username})`),
   ],
 );
 export const sessions = sqliteTable(
@@ -213,3 +221,53 @@ export const siteSettings = sqliteTable("site_settings", {
   revision: integer("revision").notNull().default(0),
   updatedAt: integer("updated_at").notNull().default(0),
 });
+
+export const reports = sqliteTable(
+  "reports",
+  {
+    id: text("id").primaryKey(),
+    reporterId: text("reporter_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    targetKind: text("target_kind").notNull(),
+    targetId: text("target_id").notNull(),
+    targetLabel: text("target_label").notNull(),
+    reason: text("reason").notNull(),
+    details: text("details").notNull(),
+    status: text("status").notNull().default("open"),
+    resolution: text("resolution").notNull().default(""),
+    reviewedBy: text("reviewed_by"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("reports_pending")
+      .on(t.reporterId, t.targetKind, t.targetId)
+      .where(sql`${t.status}='open'`),
+    index("reports_status_created").on(t.status, t.createdAt),
+    check("reports_kind", sql`${t.targetKind} IN ('snack','pawn','stasher')`),
+    check(
+      "reports_status",
+      sql`${t.status} IN ('open','resolved','dismissed')`,
+    ),
+  ],
+);
+export const staffNotifications = sqliteTable("staff_notifications", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  kind: text("kind").notNull(),
+  subjectId: text("subject_id").notNull(),
+  title: text("title").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+export const staffNotificationReads = sqliteTable(
+  "staff_notification_reads",
+  {
+    notificationId: integer("notification_id")
+      .notNull()
+      .references(() => staffNotifications.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.notificationId, t.userId] })],
+);

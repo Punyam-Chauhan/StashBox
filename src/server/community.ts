@@ -1,4 +1,5 @@
 import type { ImageBucket } from "./object-store";
+import { hasPermission } from "../domain/permissions";
 import { asciiText, checkContent, prohibitedReason } from "./content-policy";
 import { registeredHostel } from "./hostels";
 import {
@@ -34,7 +35,7 @@ export async function community(
         status: 403,
       });
   };
-  const location = `u.name AS seller_name,u.hostel,u.wing,u.phase,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,CASE WHEN u.show_phone=1 THEN u.phone ELSE NULL END AS phone,CASE WHEN qr.status='approved' THEN u.upi_qr_id ELSE NULL END AS upi_qr_id`;
+  const location = `u.username AS seller_username,u.name AS seller_name,u.hostel,u.wing,u.phase,COALESCE(u.room_label,CAST(u.room AS TEXT)) AS room,CASE WHEN u.show_phone=1 THEN u.phone ELSE NULL END AS phone,CASE WHEN qr.status='approved' THEN u.upi_qr_id ELSE NULL END AS upi_qr_id`;
   const mediaId = path.match(/^market\/media\/([a-f0-9-]{36})$/)?.[1];
   if (mediaId && req.method === "GET") {
     const row = await db
@@ -46,16 +47,18 @@ export async function community(
       !(
         row.status === "approved" ||
         user?.id === row.owner_id ||
-        user?.role === "admin"
+        hasPermission(user, "uploads")
       )
     )
       return json({ error: "Image not found." }, 404);
     if (
       row.kind === "qr" &&
       user?.id !== row.owner_id &&
-      user?.role !== "admin" &&
+      !hasPermission(user, "uploads") &&
       !(await db
-        .prepare("SELECT id FROM users WHERE upi_qr_id=?")
+        .prepare(
+          "SELECT id FROM users WHERE upi_qr_id=? AND blocked=0 AND deletion_pending=0",
+        )
         .bind(mediaId)
         .first())
     )
@@ -64,11 +67,11 @@ export async function community(
       row.kind === "pawn" &&
       row.status === "approved" &&
       user?.id !== row.owner_id &&
-      user?.role !== "admin"
+      !hasPermission(user, "uploads")
     ) {
       const live = await db
         .prepare(
-          "SELECT id FROM pawn_listings WHERE photo_id=? AND status='approved' AND available=1",
+          "SELECT p.id FROM pawn_listings p JOIN users u ON u.id=p.seller_id WHERE p.photo_id=? AND p.status='approved' AND p.available=1 AND u.blocked=0 AND u.deletion_pending=0",
         )
         .bind(mediaId)
         .first();
@@ -165,7 +168,7 @@ export async function community(
   if (path === "pawn" && req.method === "GET") {
     const rows = await db
       .prepare(
-        `SELECT p.*,${location} FROM pawn_listings p JOIN users u ON u.id=p.seller_id LEFT JOIN market_media qr ON qr.id=u.upi_qr_id WHERE p.status='approved' AND p.available=1 AND p.updated_at>? ORDER BY p.created_at DESC LIMIT 200`,
+        `SELECT p.*,${location} FROM pawn_listings p JOIN users u ON u.id=p.seller_id LEFT JOIN market_media qr ON qr.id=u.upi_qr_id WHERE p.status='approved' AND p.available=1 AND u.blocked=0 AND u.deletion_pending=0 AND p.updated_at>? ORDER BY p.created_at DESC LIMIT 200`,
       )
       .bind(Date.now() - 30 * 86400000)
       .all<any>();

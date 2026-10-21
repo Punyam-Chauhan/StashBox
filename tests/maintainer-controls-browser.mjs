@@ -1,3 +1,4 @@
+import { testStudentId } from "./helpers/identity.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chromium, browserExecutable } from "./helpers/browser.mjs";
@@ -59,7 +60,8 @@ try {
   const r = await data(admin, "signup", "POST", {
     name: "Controls Maintainer",
     email: run + "@example.test",
-    studentId: run,
+    studentId: testStudentId(run),
+    username: run,
     phone: "9000000000",
     password: "Test-password-482!",
     hostel: "patel",

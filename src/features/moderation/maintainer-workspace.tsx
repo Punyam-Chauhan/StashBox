@@ -1,5 +1,8 @@
 "use client";
 import { MaintainerControls, type ControlTool } from "./maintainer-controls";
+import { hasPermission, type StaffPermission } from "../../domain/permissions";
+import type { User } from "../../domain/shared";
+import { ReportsInbox } from "./reports-inbox";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -21,6 +24,7 @@ import { PacketPhoto } from "../catalogue/product-photos";
 import { HostelManager } from "./hostel-manager";
 import { PhotoManager } from "./photo-manager";
 type Tool =
+  | "reports"
   | "listings"
   | "catalogue"
   | "uploads"
@@ -41,10 +45,12 @@ export function MaintainerWorkspace({
   experience,
   onChanged,
   accountTools,
+  user,
 }: {
   experience: "stashbox" | "pawn";
   onChanged: () => Promise<void>;
   accountTools?: ReactNode;
+  user: User;
 }) {
   const pawn = experience === "pawn",
     endpoint = pawn ? "pawn/admin/review" : "admin/review?market=stashbox";
@@ -176,7 +182,7 @@ export function MaintainerWorkspace({
         {
           key: "accounts",
           title: "Student accounts",
-          description: "Find an account and help restore access.",
+          description: "Manage accounts, roles, suspensions and access.",
           Icon: Users,
         },
       ];
@@ -202,6 +208,26 @@ export function MaintainerWorkspace({
         Icon: RefreshCw,
       },
     );
+  const toolPermission: Record<Tool, StaffPermission> = {
+    listings: "listings",
+    catalogue: "catalogue",
+    uploads: "uploads",
+    payments: "uploads",
+    bhawans: "hostels",
+    accounts: "accounts",
+    site: "site",
+    wordlists: "site",
+    activity: "activity",
+    reports: "reports",
+  };
+  if (hasPermission(user, "reports"))
+    tools.push({
+      key: "reports",
+      title: "Reports",
+      description:
+        "Review reported listings and Stashers, reasons and explanations.",
+      Icon: ShieldCheck,
+    });
   const selected =
     tools.find((t) => t.key === tool) ||
     (tool === "uploads"
@@ -305,24 +331,26 @@ export function MaintainerWorkspace({
       {!tool ? (
         <>
           <div className="maintainer-tool-grid">
-            {tools.map(({ key, title, description, Icon, count }) => (
-              <button
-                key={key}
-                className="maintainer-tool-card"
-                onClick={() => open(key)}
-              >
-                <div>
-                  <Icon size={23} />
-                  {count !== undefined && <span>{count}</span>}
-                </div>
-                <h2>{title}</h2>
-                <p>{description}</p>
-                <span className="maintainer-tool-link">
-                  Open section
-                  <ArrowUpRight size={17} />
-                </span>
-              </button>
-            ))}
+            {tools
+              .filter((t) => hasPermission(user, toolPermission[t.key]))
+              .map(({ key, title, description, Icon, count }) => (
+                <button
+                  key={key}
+                  className="maintainer-tool-card"
+                  onClick={() => open(key)}
+                >
+                  <div>
+                    <Icon size={23} />
+                    {count !== undefined && <span>{count}</span>}
+                  </div>
+                  <h2>{title}</h2>
+                  <p>{description}</p>
+                  <span className="maintainer-tool-link">
+                    Open section
+                    <ArrowUpRight size={17} />
+                  </span>
+                </button>
+              ))}
           </div>
           {!data && !error && <p role="status">Loading overview...</p>}
           <div className="maintainer-overview-note">
@@ -334,6 +362,8 @@ export function MaintainerWorkspace({
             </p>
           </div>
         </>
+      ) : tool === "reports" ? (
+        <ReportsInbox />
       ) : ["site", "wordlists", "activity"].includes(tool) ? (
         <MaintainerControls tool={tool as ControlTool} onChanged={onChanged} />
       ) : tool === "bhawans" ? (
@@ -455,6 +485,7 @@ export function MaintainerWorkspace({
                     </div>
                     <div className="maintainer-entry-actions">
                       {!pawn &&
+                        hasPermission(user, "catalogue") &&
                         (e.kind === "product" || e.kind === "snack") && (
                           <button
                             className="button ghost"

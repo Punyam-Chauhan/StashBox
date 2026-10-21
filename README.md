@@ -34,6 +34,10 @@ See [the architecture guide](docs/architecture.md) for ownership, dependency bou
 
 ## Routes
 
+New accounts need a unique username and a college student ID containing exactly five digits. Students can report a listing or a Stasher, including by username in Help. Reports ask for a reason and explanation, then appear in the Maintainer report inbox and notification bell.
+
+In Account management, the primary Maintainer can suspend sellers, delete ordinary accounts, correct student IDs, and assign Vice-Maintainers. Select the permissions each Vice-Maintainer needs; all listed permissions can be granted. A Vice-Maintainer can delegate only permissions they already hold. The primary account is protected from other staff. Suspension hides the seller's listings across the site and signs them out. Deletion removes private uploads and account data; shared catalogue photos remain without the deleted uploader's identity.
+
 | Route            | Screen                                              |
 | ---------------- | --------------------------------------------------- |
 | /                | Hostel chooser or selected hostel's snack directory |

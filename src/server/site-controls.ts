@@ -6,6 +6,7 @@ import {
   publicSettings,
   type SiteSettings,
 } from "../domain/site-settings";
+import { hasPermission } from "../domain/permissions";
 export async function readSiteSettings(db: D1Database) {
   const row = await db
     .prepare("SELECT value,revision FROM site_settings WHERE id=1")
@@ -25,7 +26,7 @@ export async function siteControls(
   body: () => Promise<any>,
 ) {
   if (!user) return json({ error: "Log in to continue." }, 401);
-  if (user.role !== "admin" || user.must_change_password)
+  if (!hasPermission(user, "site"))
     return json({ error: "Maintainer access required." }, 403);
   const { settings, revision } = await readSiteSettings(db);
   if (req.method === "GET")
@@ -113,7 +114,7 @@ export function publicSiteResponse(settings: SiteSettings) {
 }
 export async function siteActivity(db: D1Database, user: any) {
   if (!user) return json({ error: "Log in to continue." }, 401);
-  if (user.role !== "admin" || user.must_change_password)
+  if (!hasPermission(user, "activity"))
     return json({ error: "Maintainer access required." }, 403);
   const entries = (
     await db

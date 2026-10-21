@@ -1,3 +1,4 @@
+import { testStudentId } from "./helpers/identity.mjs";
 import { chromium, browserExecutable } from "./helpers/browser.mjs";
 
 import { spawnSync } from "node:child_process";
@@ -51,7 +52,8 @@ try {
     data: {
       name: "Seller Tester",
       email: run + "@example.test",
-      studentId: run,
+      studentId: testStudentId(run),
+      username: run,
       phone: "9000000000",
       password: "Test-password-482!",
       hostel: "patel",

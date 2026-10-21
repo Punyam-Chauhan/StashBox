@@ -1,0 +1,135 @@
+.staff-bell {
+  position: relative;
+  flex-shrink: 0;
+}
+.notification-count {
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 20px;
+  background: var(--orange);
+  color: #171b12;
+  font-size: 10px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+}
+.notification-toolbar,
+.account-actions,
+.account-list header,
+.report-review header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.notification-list,
+.account-list,
+.reports-inbox,
+.permission-list {
+  display: grid;
+  gap: 14px;
+}
+.notification-list {
+  margin-top: 18px;
+}
+.notification-entry {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  transition: background 0.15s ease;
+}
+.notification-entry.unread {
+  border-left: 3px solid var(--orange);
+}
+.notification-entry small,
+.seller-handle {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+.report-button {
+  font-size: 12px;
+  gap: 5px;
+}
+.offer-report-actions {
+  display: flex;
+  gap: 18px;
+  justify-content: flex-end;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.report-details {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reports-inbox .control-heading {
+  align-items: flex-start;
+}
+.account-manager > p {
+  color: var(--muted);
+}
+.account-manager .admin-search {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+}
+.account-manager .admin-search input {
+  min-width: 0;
+  flex: 1;
+}
+.account-actions {
+  justify-content: flex-start;
+}
+.account-actions .button {
+  padding: 9px 12px;
+  font-size: 13px;
+}
+.permission-list {
+  max-height: 48vh;
+  overflow-y: auto;
+  padding: 4px;
+}
+.permission-list .control-toggle {
+  padding: 12px;
+}
+.notification-modal {
+  max-width: 540px;
+  inset: 76px 16px auto auto;
+  margin: 0;
+  max-height: calc(100dvh - 96px);
+}
+.account-list header strong {
+  overflow-wrap: anywhere;
+}
+.button.danger {
+  background: #693c31;
+  border: 1px solid #a16d54;
+  color: #ffe5d5;
+}
+@media (max-width: 600px) {
+  .staff-bell {
+    width: 32px;
+    height: 32px;
+  }
+  .account-manager .admin-search {
+    flex-wrap: wrap;
+  }
+  .account-manager .control-card {
+    padding: 16px;
+  }
+  .offer-report-actions {
+    justify-content: flex-start;
+  }
+  .permission-list {
+    max-height: 45vh;
+  }
+}

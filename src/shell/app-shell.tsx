@@ -1,5 +1,9 @@
 "use client";
 import { matchesSearch, type PublicSettings } from "../domain/site-settings";
+import { isStaff } from "../domain/permissions";
+import { AccountManager } from "../features/moderation/account-manager";
+import { NotificationCentre } from "../features/moderation/notification-centre";
+import { ReportButton } from "../features/moderation/report-button";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -112,9 +116,7 @@ export default function Home({
     [now, setNow] = useState(Date.now()),
     [authError, setAuthError] = useState("");
   const [editing, setEditing] = useState<OwnListing | null>(null);
-  const [adminUsers, setAdminUsers] = useState<any[]>([]),
-    [adminSearch, setAdminSearch] = useState(""),
-    [resetUser, setResetUser] = useState<any>(null),
+  const [resetUser, setResetUser] = useState<any>(null),
     [temporaryPassword, setTemporaryPassword] = useState("");
   async function refresh() {
     const version = ++requestVersion.current;
@@ -147,10 +149,7 @@ export default function Home({
           return;
         }
       }
-      if (
-        config.settings.maintenanceUntil > Date.now() &&
-        me.user?.role !== "admin"
-      ) {
+      if (config.settings.maintenanceUntil > Date.now() && !isStaff(me.user)) {
         setListings([]);
         return;
       }
@@ -273,10 +272,7 @@ export default function Home({
       history.replaceState(null, "", "/");
     }
   }, [site?.pawnEnabled, view]);
-  const resting =
-    !!site &&
-    site.maintenanceUntil > now &&
-    (user?.role !== "admin" || !!user.must_change_password);
+  const resting = !!site && site.maintenanceUntil > now && !isStaff(user);
   useEffect(() => {
     if (resting) {
       setMenu(false);
@@ -329,7 +325,6 @@ export default function Home({
       api("mine")
         .then((r) => setOwn(r.listings))
         .catch((e) => setToast(e.message));
-    if (view === "admin" && user?.role === "admin") loadAdmin();
   }, [view, user?.id]);
   useEffect(() => {
     if (!selected) return;
@@ -358,16 +353,6 @@ export default function Home({
   async function loadOwn() {
     setOwn((await api("mine")).listings);
     await refresh();
-  }
-  async function loadAdmin() {
-    try {
-      setAdminUsers(
-        (await api(`admin/users?search=${encodeURIComponent(adminSearch)}`))
-          .users,
-      );
-    } catch (e) {
-      setToast((e as Error).message);
-    }
   }
   function startDemo() {
     if (!site?.demoEnabled) return;
@@ -614,6 +599,7 @@ export default function Home({
             </span>
           </div>
           <div className="topbar-actions">
+            {user && <NotificationCentre user={user} />}
             {view !== "pawn" && !demo && user && !user.must_change_password && (
               <ShopShutter
                 user={user}
@@ -675,7 +661,7 @@ export default function Home({
             </section>
           ) : (
             <>
-              {site.maintenanceUntil > now && user?.role === "admin" && (
+              {site.maintenanceUntil > now && isStaff(user) && (
                 <p className="site-maintainer-notice" role="status">
                   Maintenance is active for visitors. Your Maintainer access
                   stays open until it ends automatically.
@@ -1084,8 +1070,12 @@ export default function Home({
               )}
               {view === "pawn" &&
                 pawnSection === "maintainer" &&
-                (user?.role === "admin" ? (
-                  <MaintainerWorkspace experience="pawn" onChanged={refresh} />
+                (isStaff(user) && user ? (
+                  <MaintainerWorkspace
+                    user={user}
+                    experience="pawn"
+                    onChanged={refresh}
+                  />
                 ) : (
                   <section className="pawn-settings">
                     <h1>Maintainer access</h1>
@@ -1233,7 +1223,7 @@ export default function Home({
                   )}
                 </section>
               )}
-              {view === "admin" && user && user.role !== "admin" && (
+              {view === "admin" && user && !isStaff(user) && (
                 <section className="empty-state">
                   <ShieldCheck size={34} />
                   <h1>Maintainer access</h1>
@@ -1246,69 +1236,21 @@ export default function Home({
                   </button>
                 </section>
               )}
-              {view === "admin" && user?.role === "admin" && (
+              {view === "admin" && user && isStaff(user) && (
                 <MaintainerWorkspace
+                  user={user}
                   experience="stashbox"
                   onChanged={refresh}
                   accountTools={
-                    <section className="admin-users-tool">
-                      <h2>Account recovery</h2>
-                      <form
-                        className="admin-search"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          loadAdmin();
-                        }}
-                      >
-                        <label className="search-box">
-                          <Search size={19} />
-                          <input
-                            aria-label="Find student account"
-                            value={adminSearch}
-                            onChange={(e) => setAdminSearch(e.target.value)}
-                            placeholder="Search name, student ID or email"
-                          />
-                        </label>
-                        <button className="button primary">Find student</button>
-                      </form>
-                      <div className="admin-users">
-                        {adminUsers.map((u) => (
-                          <div key={u.id}>
-                            <span className="avatar">
-                              {u.name.slice(0, 2).toUpperCase()}
-                            </span>
-                            <p>
-                              <strong>{u.name}</strong>
-                              <span>
-                                {u.student_id} · {hostelName(u.hostel)}
-                                <br />
-                                {locationText(u)}
-                                <br />
-                                {u.email}
-                              </span>
-                            </p>
-                            {u.role === "admin" ? (
-                              <span className="tag">Maintainer</span>
-                            ) : (
-                              <button
-                                className="button ghost"
-                                onClick={() => {
-                                  setResetUser(u);
-                                  setTemporaryPassword("");
-                                  setModal("reset");
-                                }}
-                              >
-                                Reset access
-                                <ArrowUpRight size={15} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                        {!adminUsers.length && (
-                          <p>No matching student accounts.</p>
-                        )}
-                      </div>
-                    </section>
+                    <AccountManager
+                      user={user}
+                      onChanged={refresh}
+                      onReset={(target) => {
+                        setResetUser(target);
+                        setTemporaryPassword("");
+                        setModal("reset");
+                      }}
+                    />
                   }
                 />
               )}
@@ -1529,12 +1471,30 @@ export default function Home({
                     <input
                       name="studentId"
                       required
-                      minLength={3}
-                      maxLength={40}
-                      placeholder="Your student ID"
+                      minLength={5}
+                      maxLength={5}
+                      pattern="[0-9]{5}"
+                      inputMode="numeric"
+                      placeholder="Five-digit student ID"
                     />
                   </label>
                 </div>
+                <label>
+                  Username
+                  <input
+                    name="username"
+                    required
+                    minLength={3}
+                    maxLength={24}
+                    pattern="[A-Za-z][A-Za-z0-9_]{2,23}"
+                    autoComplete="username"
+                    placeholder="Choose a unique username"
+                  />
+                  <small>
+                    3–24 letters, numbers or underscores. Start with a letter.
+                    Shown publicly beside your listings.
+                  </small>
+                </label>
                 <label>
                   Email address
                   <input
@@ -1563,12 +1523,12 @@ export default function Home({
               </>
             ) : (
               <label>
-                Email or student ID
+                Email, student ID or username
                 <input
                   name="identifier"
                   required
                   autoComplete="username"
-                  placeholder="Email or student ID"
+                  placeholder="Email, student ID or @username"
                 />
               </label>
             )}
@@ -1712,6 +1672,9 @@ export default function Home({
                 defaultValue={user.name}
               />
             </label>
+            <p className="seller-handle">
+              Your public username: @{user.username}
+            </p>
             {!user.hostel && (
               <p className="inline-note">
                 Choose your hostel and enter your location to make your saved
@@ -1934,7 +1897,8 @@ export default function Home({
           className={`modal-support support-theme-${view === "pawn" ? "pawn" : "stashbox"}`}
         >
           <SupportPanel experience={view === "pawn" ? "pawn" : "stashbox"} />
-          {user && String(user.room) === "224" && user.role !== "admin" && (
+          <ReportButton label="Report a Stasher by username" />
+          {user && String(user.room) === "224" && !isStaff(user) && (
             <form
               className="form setup-form"
               onSubmit={(e) => {

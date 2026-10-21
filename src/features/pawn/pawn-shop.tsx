@@ -22,6 +22,7 @@ import { requestJSON as call } from "../../shared/lib/api-client";
 import { Modal } from "../../shared/ui/dialog";
 import { PaymentQR, SellerPayments } from "../payments/payment-qr";
 import { PawnForm } from "./pawn-form";
+import { ReportButton } from "../moderation/report-button";
 import type { PawnSection } from "./pawn-sidebar";
 type PawnItem = {
   id: string;
@@ -34,6 +35,7 @@ type PawnItem = {
   available: number;
   seller_id: string;
   seller_name: string;
+  seller_username?: string;
   hostel: string;
   wing: string;
   room: string;
@@ -108,7 +110,7 @@ export function PawnShop({
   const rows = (tab === "mine" ? own : items)
     .filter((i) =>
       matchesSearch(
-        `${i.title} ${i.description} ${i.seller_name || ""} ${hostelName(i.hostel)}`,
+        `${i.title} ${i.description} ${i.seller_name || ""} ${i.seller_username || ""} ${hostelName(i.hostel)}`,
         query,
         searchAliases,
       ),
@@ -514,6 +516,9 @@ export function PawnShop({
               <p>{selected.description}</p>
               <div className="pawn-seller">
                 <strong>{selected.seller_name || user?.name}</strong>
+                {selected.seller_username && (
+                  <p className="seller-handle">@{selected.seller_username}</p>
+                )}
                 <p>
                   {hostelName(selected.hostel || user?.hostel)}
                   <br />
@@ -537,6 +542,21 @@ export function PawnShop({
                 <p>Visit the Stasher to arrange the exchange.</p>
               )}
               <PaymentQR id={selected.upi_qr_id} />
+              {selected.seller_id !== user?.id && (
+                <div className="offer-report-actions">
+                  <ReportButton
+                    kind="pawn"
+                    targetId={selected.id}
+                    targetLabel={selected.title}
+                    label="Report listing"
+                  />
+                  <ReportButton
+                    targetId={selected.seller_id}
+                    username={selected.seller_username}
+                    targetLabel={selected.seller_name}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </Modal>
